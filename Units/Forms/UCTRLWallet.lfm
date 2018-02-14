@@ -3,12 +3,13 @@ object CTRLWallet: TCTRLWallet
   Height = 536
   Top = 2
   Width = 796
+  ActiveControl = cbMyAccViews
   BorderStyle = bsNone
   Caption = 'CTRLWallet'
   ClientHeight = 536
   ClientWidth = 796
   OnCreate = FormCreate
-  LCLVersion = '1.6.4.0'
+  Visible = False
   object GroupBox1: TGroupBox
     Left = 32
     Height = 129

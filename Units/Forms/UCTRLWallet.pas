@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, FileUtil, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  ExtCtrls, UVisualGrid, UCommonUI;
+  ExtCtrls, UVisualGrid, UCommon.UI;
 
 type
 
@@ -43,7 +43,12 @@ uses UGrids;
 procedure TCTRLWallet.FormCreate(Sender: TObject);
 begin
   FAccountsGrid := TVisualGrid.Create(Self);
+  FAccountsGrid.FetchDataInThread:= true;
+  FAccountsGrid.AutoPageSize:= true;
+  FAccountsGrid.SelectionType:= stMultiRow;
   FAccountsGrid.DataSource := TMyAccountDataSource.Create(FAccountsGrid);
+  FAccountsGrid.Options := [vgoColAutoFill,vgoColSizing, vgoSortDirectionAllowNone];
+  FAccountsGrid.DefaultStretchedColumn := 1;
   AccountsView := wavMyAccounts;
 end;
 

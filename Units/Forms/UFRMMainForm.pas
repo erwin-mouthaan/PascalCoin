@@ -21,7 +21,7 @@ uses
   ULog,
   UBlockChain, UNode, UGridUtils, UAccounts, Menus,
   UNetProtocol, UCrypto, Buttons, ActnList, UPoolMining,
-  UCTRLBanner, UCTRLWallet, UCTRLSyncronization, UCommon, UCommonUI;
+  UCTRLBanner, UCTRLWallet, UCTRLSyncronization, UCommon, UCommon.UI;
 
 const
   CM_PC_FinishedLoadingDatabase = WM_USER + 1;

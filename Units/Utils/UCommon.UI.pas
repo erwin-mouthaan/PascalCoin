@@ -1,7 +1,7 @@
 {
   Copyright (c) 2017 Sphere 10 Software
 
-  Common unit usable across all tiers.
+  Common GUI unit usable across all tiers.
 
   Distributed under the MIT software license, see the accompanying file LICENSE
   or visit http://www.opensource.org/licenses/mit-license.php.
@@ -10,14 +10,14 @@
     Herman Schoenfeld
 }
 
-unit UCommonUI;
+unit UCommon.UI;
 
 {$mode delphi}
 
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls,ExtCtrls,  Graphics, Generics.Collections, Generics.Defaults, syncobjs;
+  Classes, SysUtils, Forms, Controls,ExtCtrls,  FGL, Graphics, Generics.Collections, Generics.Defaults, syncobjs;
 
 type
   TApplicationForm = class(TForm)
@@ -29,7 +29,7 @@ type
       procedure NotifyActivateFirstTime;
       procedure NotifyDestroyed;
     protected
-      FUILock : syncobjs.TCriticalSection;
+      FUILock : TCriticalSection;
       procedure DoCreate; override;
       procedure Activate; override;
       procedure ActivateFirstTime; virtual;
@@ -65,15 +65,12 @@ type
 
 implementation
 
-uses
-  lcl, FGL;
-
 {%region TApplicationForm}
 
 procedure TApplicationForm.DoCreate;
 begin
   inherited;
-  FUILock := syncobjs.TCriticalSection.Create;
+  FUILock := TCriticalSection.Create;
   FActivatedCount := 0;
   FCloseAction:=caHide;
 end;
