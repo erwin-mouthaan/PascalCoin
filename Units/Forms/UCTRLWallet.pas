@@ -47,7 +47,7 @@ begin
   FAccountsGrid.AutoPageSize:= true;
   FAccountsGrid.SelectionType:= stMultiRow;
   FAccountsGrid.DataSource := TMyAccountDataSource.Create(FAccountsGrid);
-  FAccountsGrid.Options := [vgoColAutoFill,vgoColSizing, vgoSortDirectionAllowNone];
+  FAccountsGrid.Options := [vgoColAutoFill, vgoColSizing, vgoSortDirectionAllowNone];
   FAccountsGrid.DefaultStretchedColumn := 1;
   AccountsView := wavMyAccounts;
 end;

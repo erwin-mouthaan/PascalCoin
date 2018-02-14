@@ -288,6 +288,7 @@ type
       class function Create(const item0 : T; const item1 : T; const item2 : T; const item3 : T) : TArray<T>; overload; static;
       class function Create(const item0 : T; const item1 : T; const item2 : T; const item3 : T; const item4 : T) : TArray<T>; overload; static;
       class function Create(const item0 : T; const item1 : T; const item2 : T; const item3 : T; const item4 : T; const item5 : T) : TArray<T>; overload; static;
+      class function _Length(const Values: array of T) : SizeInt; static; inline;
       class function ToArray(Enumerable: TEnumerable<T>; Count: SizeInt): TArray<T>; static;
   end;
 
@@ -1304,6 +1305,10 @@ begin
   end;
 end;
 
+class function TArrayTool<T>._Length(const Values: array of T) : SizeInt;
+begin
+   Result := Length(Values);
+end;
 {%endregion}
 
 

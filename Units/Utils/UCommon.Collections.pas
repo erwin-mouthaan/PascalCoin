@@ -110,6 +110,9 @@ type
        end;
 
        TAndManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
+         private type
+           __IPredicate = IPredicate<T>;
+           __TArrayTool = TArrayTool<__IPredicate>;
          private
            FPredicates : array of IPredicate<T>;
          public
@@ -118,6 +121,9 @@ type
        end;
 
        TOrManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
+         private type
+           __IPredicate = IPredicate<T>;
+           __TArrayTool = TArrayTool<__IPredicate>;
          private
            FPredicates : array of IPredicate<T>;
          public
@@ -314,7 +320,7 @@ end;
 
 constructor TAndManyPredicate<T>.Create(const APredicates: array of IPredicate<T>);
 begin
-  FPredicates := TArrayTool<T>.Copy(APredicates);
+  FPredicates := __TArrayTool.Copy(APredicates);
 end;
 
 function TAndManyPredicate<T>.Evaluate (constref AValue: T) : boolean;
@@ -339,7 +345,7 @@ end;
 
 constructor TOrManyPredicate<T>.Create(const APredicates: array of IPredicate<T>);
 begin
-  FPredicates := TArrayTool<T>.Copy(APredicates);
+  FPredicates := __TArrayTool.Copy(APredicates);
 end;
 
 function TOrManyPredicate<T>.Evaluate (constref AValue: T) : boolean;
@@ -451,6 +457,7 @@ end;
 {%endregion}
 
 end.
+
 
 
 
