@@ -60,7 +60,7 @@ end;
 
 function TMyAccountDataSource.GetColumns : TTableColumns;
 begin
-  Result := TTableColumns.Create('Account', 'Name', 'Balance');
+  Result := TTableColumns.Create('Account', 'Name', 'Balance', 'Key', 'Type', 'State', 'Price', 'LockedUntil');
 end;
 
 function TMyAccountDataSource.GetSearchCapabilities: TSearchCapabilities;
@@ -68,7 +68,12 @@ begin
   Result := TSearchCapabilities.Create(
     TSearchCapability.From('Account', SORTABLE_NUMERIC_FILTER),
     TSearchCapability.From('Name', SORTABLE_TEXT_FILTER),
-    TSearchCapability.From('Balance', SORTABLE_NUMERIC_FILTER)
+    TSearchCapability.From('Balance', SORTABLE_NUMERIC_FILTER),
+    TSearchCapability.From('Key', SORTABLE_TEXT_FILTER),
+    TSearchCapability.From('Type', SORTABLE_NUMERIC_FILTER),
+    TSearchCapability.From('State', SORTABLE_NUMERIC_FILTER),
+    TSearchCapability.From('Price', SORTABLE_NUMERIC_FILTER),
+    TSearchCapability.From('LockedUntil', SORTABLE_NUMERIC_FILTER)
   );
 end;
 
@@ -98,47 +103,39 @@ begin
 end;
 
 
-function TMyAccountDataSource.GetItemField(const AItem: T; const AColumnName : AnsiString) : Variant;
+function TMyAccountDataSource.GetItemField(const AItem: TAccount; const AColumnName : AnsiString) : Variant;
 begin
+   if AColumnName = 'Account' then
+     Result := AItem.account
+   else if AColumnName = 'Name' then
+     Result := AItem.name
+   else if AColumnName = 'Balance' then
+     Result := AItem.balance
+   else if AColumnName = 'Key' then
+     Result := TAccountComp.AccountPublicKeyExport(AItem.accountInfo.accountKey)
+   else if AColumnName = 'Type' then
+     Result := AItem.account_type
+   else if AColumnName = 'State' then
+     Result := AItem.accountInfo.state
+   else if AColumnName = 'Price' then
+     Result := AItem.accountInfo.price
+   else if AColumnName = 'LockedUntil' then
+     Result := AItem.accountInfo.locked_until_block
+   else raise Exception.Create(Format('Field not found [%s]', [AColumnName]));
 end;
 
 procedure TMyAccountDataSource.DehydrateItem(const AItem: TAccount; ATableRow: Variant);
 begin
+  // 'Account', 'Name', 'Balance', 'Key', 'Type', 'State', 'Price', 'LockedUntil'
   ATableRow.Account := TAccountComp.AccountNumberToAccountTxtNumber(AItem.account);
   ATableRow.Name := Copy(AItem.name, 0, AItem.name.Length);
-  ATableRow.Balance := Cardinal(AItem.balance);
+  ATableRow.Balance := TAccountComp.FormatMoney(AItem.balance);
+  ATableRow.Key := TAccountComp.AccountPublicKeyExport(AItem.accountInfo.accountKey);
+  ATableRow.&Type := Cardinal(AItem.balance);
+  ATableRow.State := Cardinal(AItem.accountInfo.state);
+  ATableRow.Price := TAccountComp.FormatMoney(Aitem.accountInfo.price);
+  ATableRow.LockedUntil := Cardinal(AItem.accountInfo.locked_until_block);
 end;
-
-
-{ if AFilter.ColumnName = 'Account' then
-   Result := TCompare.UInt32(Left.account, Right.account)
- else if AFilter.ColumnName = 'Name' then
-   Result := TCompare.AnsiString(Left.name, Right.name)
- else if AFilter.ColumnName = 'Balance' then
-   Result := TCompare.UInt64(Left.balance, Right.balance)
- else if AFilter.ColumnName = 'Key' then begin
-   if Left.accountInfo.accountKey = Right.accountInfo.AccountKey then begin
-     Result := 0;
-   end else begin
-     Result := TCompare.UInt16(Left.accountInfo.accountKey.EC_OpenSSL_NID, Right.accountInfo.accountKey.EC_OpenSSL_NID);
-     if Result = 0 then
-       Result := BinStrComp(Left.accountInfo.accountKey.x, Right.accountInfo.accountKey.x);
-     if Result = 0 then
-       Result := BinStrComp(Left.accountInfo.accountKey.y, Right.accountInfo.accountKey.y);
-    end
- end else if AFilter.ColumnName = 'Type' then
-   Result := TCompare.UInt16(Left.account_type, Right.account_type)
- else if AFilter.ColumnName = 'State' then
-   Result := TCompare.UInt16(Word(Left.accountInfo.state), Word(Right.accountInfo.state))
- else if AFilter.ColumnName = 'Price' then
-   Result := TCompare.UInt64(Left.accountInfo.price, Right.accountInfo.price)
- else if AFilter.ColumnName = 'LockedUntil' then
-   Result := TCompare.UInt32(Left.accountInfo.locked_until_block, Right.accountInfo.locked_until_block)
- else raise Exception.Create(Format('Field not found [%s]', [AFilter.ColumnName]));
-
- // Invert result for descending
- if AFilter.Sort = sdDescending then
-   Result := Result * -1;            }
 
 end.
 
