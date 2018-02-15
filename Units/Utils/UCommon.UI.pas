@@ -1,5 +1,5 @@
 {
-  Copyright (c) 2017 Sphere 10 Software
+  Copyright (c) 2017 - 2018 Sphere 10 Software
 
   Common GUI unit usable across all tiers.
 

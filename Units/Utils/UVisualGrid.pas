@@ -1,7 +1,7 @@
 ﻿{
-  Copyright (c) 2017 Sphere 10 Software
+  Copyright (c) 2017 - 2018 Sphere 10 Software
 
-  TVisualGrid is an enterprise-class grid component with datasource, paging, searching capability.
+  An enterprise-class grid component with datasource, paging, searching capability.
 
   Distributed under the MIT software license, see the accompanying file LICENSE
   or visit http://www.opensource.org/licenses/mit-license.php.
@@ -58,11 +58,11 @@ type
 
   { TApplyFilterDelegate }
 
-  TApplyFilterDelegate<T> = function (const AItem : T; const AColumnFilter: TColumnFilter) : boolean of object;
+  TApplyFilterDelegate<T> = function (constref AItem : T; const AColumnFilter: TColumnFilter) : boolean of object;
 
   { TApplySortDelegate }
 
-  TApplySortDelegate<T> = function (const Left : T; const Right : T; const AColumnFilter: TColumnFilter) : Integer of object;
+  TApplySortDelegate<T> = function (constref Left, Right : T; const AColumnFilter: TColumnFilter) : Integer of object;
 
   { TDataTable }
 
@@ -145,16 +145,16 @@ type
       function GetNullPolicy(const AFilter : TColumnFilter) : TSortNullPolicy; virtual;
       function GetItemDisposePolicy : TItemDisposePolicy; virtual; abstract;
       function GetColumns : TTableColumns; virtual; abstract;
-      function ApplyColumnSort(const Left : T; const Right : T; const AFilter: TColumnFilter) : Integer; virtual;
-      function ApplyColumnFilter(const AItem: T; const AFilter: TColumnFilter) : boolean; virtual;
+      function ApplyColumnSort(constref Left, Right : T; const AFilter: TColumnFilter) : Integer; virtual;
+      function ApplyColumnFilter(constref AItem: T; const AFilter: TColumnFilter) : boolean; virtual;
     public
       constructor Create(AOwner: TComponent); override;
       destructor Destroy; override;
       function FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
       function GetSearchCapabilities: TSearchCapabilities; virtual; abstract;
-      procedure FetchAll( AContainer : TList<T>); virtual; abstract;
-      function GetItemField(const AItem: T; const AColumnName : AnsiString) : Variant; virtual; abstract;
-      procedure DehydrateItem(const AItem: T; ATableRow: Variant); virtual; abstract;
+      procedure FetchAll(const AContainer : TList<T>); virtual; abstract;
+      function GetItemField(constref AItem: T; const AColumnName : AnsiString) : Variant; virtual; abstract;
+      procedure DehydrateItem(constref AItem: T; const ATableRow: Variant); virtual; abstract;
   end;
 
   { TVisualGridSelection }
@@ -550,7 +550,7 @@ begin
   end;
 end;
 
-function TCustomDataSource<T>.ApplyColumnSort(const Left : T; const Right : T; const AFilter: TColumnFilter) : Integer;
+function TCustomDataSource<T>.ApplyColumnSort(constref Left, Right : T; const AFilter: TColumnFilter) : Integer;
 var
   leftField, rightField : Variant;
   leftType, rightType : Integer;
@@ -582,7 +582,7 @@ begin
     Result := Result * -1;
 end;
 
-function TCustomDataSource<T>.ApplyColumnFilter(const AItem: T; const AFilter: TColumnFilter) : boolean;
+function TCustomDataSource<T>.ApplyColumnFilter(constref AItem: T; const AFilter: TColumnFilter) : boolean;
 var
   value : Variant;
 begin
@@ -627,12 +627,7 @@ begin
 
      // NEED TO CONFIRM TEST OF Comparer/Filter API
      // Filter the data
-          Writeln('before filter construct');
      filter := TVisualGridTool<T>.ConstructRowPredicate(AParams.Filter, ApplyColumnFilter, true);
-
-     Writeln('before evalulate');
-     xxx := filter.Evaluate(data[0]);
-     Writeln('before filter');
      TListTool<T>.Filter(data, filter);
 
      // UGrids.pas(111,95) Error: Incompatible type for arg no. 2: Got "TCustomDataSource$1.ApplyColumnFilter(const TAccount;const TColumnFilter):Boolean;", expected "<procedure variable type of function(const <undefined type>;const TColumnFilter):Boolean of object;Register>"

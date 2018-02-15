@@ -1,3 +1,16 @@
+{
+  Copyright (c) 2017 - 2018 Sphere 10 Software
+
+  Common tools and extensions for Generics.Collections and collections in general usable
+  across all tiers.
+
+  Distributed under the MIT software license, see the accompanying file LICENSE
+  or visit http://www.opensource.org/licenses/mit-license.php.
+
+  Acknowledgements:
+    Herman Schoenfeld
+}
+
 unit UCommon.Collections;
 
 {$mode delphi}
@@ -35,21 +48,21 @@ type
       class function Many(const comparers: array of TGlobalComparerFunc<T>) : IComparer<T>; overload;
       class function Many(const comparers: array of IComparer<T>) : IComparer<T>; overload;
       class function Many(const comparers: TEnumerable<__IComparer_T>) : IComparer<T>; overload;
-      class function AlwaysEqual : IComparer<T>; static;
+      class function AlwaysEqual : IComparer<T>;
     private
       // These should be nested but FPC doesn't support nested functions in generics
-      class function AlwaysEqualHandler(const Left, Right: T) : Integer; static;
+      class function AlwaysEqualHandler(constref Left, Right: T) : Integer;
   end;
 
   { Predicate API }
 
   // Note: the pattern for nested/object/global delegates is custom
 
-  TNestedPredicateFunc<T> = function (const AVal : T) : boolean is nested;
+  TNestedPredicateFunc<T> = function (constref AVal : T) : boolean is nested;
 
-  TObjectPredicateFunc<T> = function (const AVal : T) : boolean of object;
+  TObjectPredicateFunc<T> = function (constref AVal : T) : boolean of object;
 
-  TGlobalPredicateFunc<T> = function (const AVal : T) : boolean;
+  TGlobalPredicateFunc<T> = function (constref AVal : T) : boolean;
 
   IPredicate<T> = interface
     function Evaluate (constref AValue: T) : boolean;
@@ -57,17 +70,17 @@ type
 
   TPredicateTool<T> = class
     public
-      class function FromFunc(AFunc: TNestedPredicateFunc<T>) : IPredicate<T>; overload;
-      class function FromFunc(AFunc: TObjectPredicateFunc<T>) : IPredicate<T>; overload;
-      class function FromFunc(AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>; overload;
-      class function AndMany( APredicates : array of IPredicate<T>) : IPredicate<T>;
-      class function OrMany( APredicates : array of IPredicate<T>) : IPredicate<T>;
+      class function FromFunc(const AFunc: TNestedPredicateFunc<T>) : IPredicate<T>; overload;
+      class function FromFunc(const AFunc: TObjectPredicateFunc<T>) : IPredicate<T>; overload;
+      class function FromFunc(const AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>; overload;
+      class function AndMany(const APredicates : array of IPredicate<T>) : IPredicate<T>;
+      class function OrMany(const APredicates : array of IPredicate<T>) : IPredicate<T>;
       class function AlwaysTrue : IPredicate<T>;
       class function AlwaysFalse : IPredicate<T>;
     private
       // These should be nested but FPC doesn't support nested functions in generics
-      class function TrueHandler(const AItem: T) : boolean; static;
-      class function FalseHandler(const AItem: T) : boolean; static;
+      class function TrueHandler(constref AItem: T) : boolean;
+      class function FalseHandler(constref AItem: T) : boolean;
   end;
 
   { TListTool }
@@ -78,8 +91,8 @@ type
     class function Skip(const AList: TList<T>; const ACount : SizeInt) : SizeInt;
     class function Take(const AList: TList<T>; const ACount : SizeInt) : SizeInt;
     class function Filter(const AList: TList<T>; const APredicate: IPredicate<T>) : SizeInt; overload;
-    class function Filter(const AList: TList<T>; const APredicate: IPredicate<T>; ADisposePolicy : TItemDisposePolicy) : SizeInt; overload;
-    class procedure DiposeItem(const AList: TList<T>; index : SizeInt; ADisposePolicy : TItemDisposePolicy);
+    class function Filter(const AList: TList<T>; const APredicate: IPredicate<T>; const ADisposePolicy : TItemDisposePolicy) : SizeInt; overload;
+    class procedure DiposeItem(const AList: TList<T>; const index : SizeInt; const ADisposePolicy : TItemDisposePolicy);
   end;
 
   { Private types (implementation only) - FPC Bug 'Global Generic template references static symtable' }
@@ -105,6 +118,7 @@ type
      FFunc: TGlobalComparerFunc<T>;
    public
      constructor Create(const AComparerFunc: TGlobalComparerFunc<T>); overload;
+     destructor Destroy; override;
      function Compare(constref Left, Right: T): Integer;
   end;
 
@@ -115,6 +129,7 @@ type
        FComparers : TArray<IComparer_T>;
      public
        constructor Create(const comparers: TArray<IComparer_T>); overload;
+       destructor Destroy; override;
        function Compare(constref Left, Right: T): Integer;
    end;
 
@@ -122,7 +137,7 @@ type
    private
      FFunc : TNestedPredicateFunc<T>;
    public
-     constructor Create(AFunc: TNestedPredicateFunc<T>); overload;
+     constructor Create(const AFunc: TNestedPredicateFunc<T>); overload;
      function Evaluate (constref AValue: T) : boolean;
   end;
 
@@ -130,7 +145,7 @@ type
    private
      FFunc : TObjectPredicateFunc<T>;
    public
-     constructor Create(AFunc: TObjectPredicateFunc<T>); overload;
+     constructor Create(const AFunc: TObjectPredicateFunc<T>); overload;
      function Evaluate (constref AValue: T) : boolean;
   end;
 
@@ -138,11 +153,12 @@ type
    private
      FFunc : TGlobalPredicateFunc<T>;
    public
-     constructor Create(AFunc: TGlobalPredicateFunc<T>); overload;
+     constructor Create(const AFunc: TGlobalPredicateFunc<T>); overload;
+     destructor Destroy; override;
      function Evaluate (constref AValue: T) : boolean;
   end;
 
-  TAndManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
+  TAndManyPredicate<T> = class (TInterfacedObject, IPredicate<T>)
    private type
      __IPredicate = IPredicate<T>;
      __TArrayTool = TArrayTool<__IPredicate>;
@@ -150,6 +166,7 @@ type
      FPredicates : array of IPredicate<T>;
    public
      constructor Create(const APredicates: array of IPredicate<T>); overload;
+     destructor Destroy; override;
      function Evaluate (constref AValue: T) : boolean;
   end;
 
@@ -245,10 +262,10 @@ class function TComparerTool<T>.AlwaysEqual : IComparer<T>;
 type
   __TGlobalComparerFunc_T = TGlobalComparerFunc<T>;
 begin
-  Result :=  TComparerTool<T>.FromFunc( __TGlobalComparerFunc_T(AlwaysEqualHandler) );
+  Result :=  TComparerTool<T>.FromFunc( AlwaysEqualHandler );
 end;
 
-class function TComparerTool<T>.AlwaysEqualHandler(const Left, Right: T) : Integer; static;
+class function TComparerTool<T>.AlwaysEqualHandler(constref Left, Right: T) : Integer;
 begin
   Result := 0;
 end;
@@ -284,6 +301,11 @@ begin
   FFunc := AComparerFunc;
 end;
 
+destructor TGlobalComparer<T>.Destroy;
+begin
+  inherited;
+end;
+
 function TGlobalComparer<T>.Compare(constref Left, Right: T): Integer;
 begin
   Result := FFunc(Left, Right);
@@ -294,6 +316,11 @@ end;
 constructor TManyComparer<T>.Create(const comparers: TArray<IComparer_T>);
 begin
   FComparers := comparers;
+end;
+
+destructor TManyComparer<T>.Destroy;
+begin
+  inherited;
 end;
 
 
@@ -316,27 +343,27 @@ end;
 
 { TPredicateTool }
 
-class function TPredicateTool<T>.FromFunc(AFunc: TNestedPredicateFunc<T>) : IPredicate<T>;
+class function TPredicateTool<T>.FromFunc(const AFunc: TNestedPredicateFunc<T>) : IPredicate<T>;
 begin
   Result := TNestedPredicate<T>.Create(AFunc);
 end;
 
-class function TPredicateTool<T>.FromFunc(AFunc: TObjectPredicateFunc<T>) : IPredicate<T>;
+class function TPredicateTool<T>.FromFunc(const AFunc: TObjectPredicateFunc<T>) : IPredicate<T>;
 begin
   Result := TObjectPredicate<T>.Create(AFunc);
 end;
 
-class function TPredicateTool<T>.FromFunc(AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>;
+class function TPredicateTool<T>.FromFunc(const AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>;
 begin
   Result := TGlobalPredicate<T>.Create(AFunc);
 end;
 
-class function TPredicateTool<T>.AndMany( APredicates : array of IPredicate<T>) : IPredicate<T>;
+class function TPredicateTool<T>.AndMany(const APredicates : array of IPredicate<T>) : IPredicate<T>;
 begin
   Result := TAndManyPredicate<T>.Create(APredicates);
 end;
 
-class function TPredicateTool<T>.OrMany( APredicates : array of IPredicate<T>) : IPredicate<T>;
+class function TPredicateTool<T>.OrMany(const APredicates : array of IPredicate<T>) : IPredicate<T>;
 begin
   Result := TOrManyPredicate<T>.Create(APredicates);
 end;
@@ -352,20 +379,20 @@ begin
 end;
 
 // Shold be nested funcion but generics can't have in FPC!
-class function TPredicateTool<T>.TrueHandler(const AItem: T) : boolean;
+class function TPredicateTool<T>.TrueHandler(constref AItem: T) : boolean;
 begin
   Result := true;
 end;
 
 // Shold be nested funcion but generics can't have in FPC!
-class function TPredicateTool<T>.FalseHandler(const AItem: T) : boolean;
+class function TPredicateTool<T>.FalseHandler(constref AItem: T) : boolean;
 begin
   Result := true;
 end;
 
 { TNestedPredicate }
 
-constructor TNestedPredicate<T>.Create(AFunc: TNestedPredicateFunc<T>);
+constructor TNestedPredicate<T>.Create(const AFunc: TNestedPredicateFunc<T>);
 begin
   FFunc := AFunc;
 end;
@@ -377,7 +404,7 @@ end;
 
 { TObjectPredicate }
 
-constructor TObjectPredicate<T>.Create(AFunc: TObjectPredicateFunc<T>);
+constructor TObjectPredicate<T>.Create(const AFunc: TObjectPredicateFunc<T>);
 begin
   FFunc := AFunc;
 end;
@@ -389,9 +416,14 @@ end;
 
 { TGlobalPredicate }
 
-constructor TGlobalPredicate<T>.Create(AFunc: TGlobalPredicateFunc<T>);
+constructor TGlobalPredicate<T>.Create(const AFunc: TGlobalPredicateFunc<T>);
 begin
   FFunc := AFunc;
+end;
+
+destructor TGlobalPredicate<T>.Destroy;
+begin
+  inherited;
 end;
 
 function TGlobalPredicate<T>.Evaluate (constref AValue: T) : boolean;
@@ -405,6 +437,11 @@ end;
 constructor TAndManyPredicate<T>.Create(const APredicates: array of IPredicate<T>);
 begin
   FPredicates := __TArrayTool.Copy(APredicates);
+end;
+
+destructor TAndManyPredicate<T>.Destroy;
+begin
+  inherited;
 end;
 
 function TAndManyPredicate<T>.Evaluate (constref AValue: T) : boolean;
@@ -450,7 +487,6 @@ begin
 end;
 
 {%endregion}
-
 
 {%region TListTool}
 
@@ -504,7 +540,7 @@ begin
   Result := Filter(AList, APredicate, idpNone);
 end;
 
-class function TListTool<T>.Filter(const AList: TList<T>; const APredicate: IPredicate<T>; ADisposePolicy : TItemDisposePolicy) : SizeInt;
+class function TListTool<T>.Filter(const AList: TList<T>; const APredicate: IPredicate<T>; const ADisposePolicy : TItemDisposePolicy) : SizeInt;
 var
   i : SizeInt;
   item : T;
@@ -521,7 +557,7 @@ begin
   end;
 end;
 
-class procedure TListTool<T>.DiposeItem(const AList: TList<T>; index : SizeInt; ADisposePolicy : TItemDisposePolicy);
+class procedure TListTool<T>.DiposeItem(const AList: TList<T>; const index : SizeInt; const ADisposePolicy : TItemDisposePolicy);
 var
   item : T;
 begin
@@ -541,7 +577,4 @@ end;
 {%endregion}
 
 end.
-
-
-
 

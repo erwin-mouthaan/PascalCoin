@@ -1,5 +1,5 @@
 {
-  Copyright (c) 2017 Sphere 10 Software
+  Copyright (c) 2017 - 2018 Sphere 10 Software
 
   Common unit usable across all tiers.
 
@@ -8,7 +8,6 @@
 
   Acknowledgements:
     Herman Schoenfeld
-    Maciej Izak (hnb)
 }
 
 unit UCommon;

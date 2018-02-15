@@ -1,7 +1,7 @@
 {
-  Copyright (c) 2017 Sphere 10 Software
+  Copyright (c) 2017 - 2018 Sphere 10 Software
 
-  Common unit usable across all tiers.
+  Common data-oriented classes usable across all tiers.
 
   Distributed under the MIT software license, see the accompanying file LICENSE
   or visit http://www.opensource.org/licenses/mit-license.php.

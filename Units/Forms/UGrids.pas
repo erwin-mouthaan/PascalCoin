@@ -27,9 +27,9 @@ type
       function GetColumns : TTableColumns;  override;
     public
       function GetSearchCapabilities: TSearchCapabilities; override;
-      procedure FetchAll( AContainer : TList<TAccount>); override;
-      function GetItemField(const AItem: TAccount; const AColumnName : AnsiString) : Variant; override;
-      procedure DehydrateItem(const AItem: TAccount; ATableRow: Variant); override;
+      procedure FetchAll(const AContainer : TList<TAccount>); override;
+      function GetItemField(constref AItem: TAccount; const AColumnName : AnsiString) : Variant; override;
+      procedure DehydrateItem(constref AItem: TAccount; const ATableRow: Variant); override;
   end;
 
 implementation
@@ -63,7 +63,7 @@ begin
 end;
 
 
-procedure TMyAccountDataSource.FetchAll( AContainer : TList<TAccount>);
+procedure TMyAccountDataSource.FetchAll(const AContainer : TList<TAccount>);
 var
   i : integer;
   acc : TAccount;
@@ -78,16 +78,15 @@ begin
      FUserKeys.Add(TWallet.Keys.Key[i].AccountKey);
 
    // load user accounts
-   AContainer.Clear;
    for i := 0 to FSafeBox.AccountsCount - 1 do begin
      acc := FSafeBox.Account(i);
-     if FUserKeys.Contains(acc.accountInfo.accountKey) then
+//     if FUserKeys.Contains(acc.accountInfo.accountKey) then
        AContainer.Add(acc);
    end;
 end;
 
 
-function TMyAccountDataSource.GetItemField(const AItem: TAccount; const AColumnName : AnsiString) : Variant;
+function TMyAccountDataSource.GetItemField(constref AItem: TAccount; const AColumnName : AnsiString) : Variant;
 begin
    if AColumnName = 'Account' then
      Result := AItem.account
@@ -108,7 +107,7 @@ begin
    else raise Exception.Create(Format('Field not found [%s]', [AColumnName]));
 end;
 
-procedure TMyAccountDataSource.DehydrateItem(const AItem: TAccount; ATableRow: Variant);
+procedure TMyAccountDataSource.DehydrateItem(constref AItem: TAccount; const ATableRow: Variant);
 begin
   // 'Account', 'Name', 'Balance', 'Key', 'Type', 'State', 'Price', 'LockedUntil'
   ATableRow.Account := TAccountComp.AccountNumberToAccountTxtNumber(AItem.account);
