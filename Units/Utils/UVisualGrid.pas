@@ -318,6 +318,7 @@ type
   private
     FCaption: TVisualGridCaption;
     FFetchDataInThread: boolean;
+    FActiveThread: TThread;
     FOnPreparePopupMenu: TPreparePopupMenuEvent;
     FOnSelection: TSelectionEvent;
     FOptions: TVisualGridOptions;
@@ -633,6 +634,9 @@ begin
        pageEnd := data.Count - 1;
      end;
 
+     // Set columns
+     ADataTable.Columns := FColumns;
+
      // Dehydrate the page of data only
      j := 0;
      SetLength(ADataTable.Rows, pageEnd - pageStart + 1);
@@ -790,6 +794,7 @@ end;
 constructor TFetchDataThread.Create(AGrid: TCustomVisualGrid;
   ARefreshColumns: boolean);
 begin
+  AGrid.FActiveThread := Self;
   FGrid := AGrid;
   FGrid.ControlsEnable(false);
   FGrid.FFetchDataThreadTimer.Enabled:=true;
@@ -1990,7 +1995,10 @@ end;
 procedure TCustomVisualGrid.RefreshPageIndexData(ARefreshColumns: boolean);
 begin
   if Assigned(FDataSource) and FetchDataInThread then
-    TFetchDataThread.Create(Self, ARefreshColumns)
+  begin
+    if not Assigned(FActiveThread) then
+      TFetchDataThread.Create(Self, ARefreshColumns)
+  end
   else
   begin
     BeforeFetchPage;
@@ -2276,6 +2284,7 @@ begin
   begin
     if FromThread then
     begin
+      FActiveThread := nil;
       Dispose(FCachedDataTable);
       FCachedDataTable := nil;
       FFetchDataThreadTimer.Enabled:=false;
@@ -2340,6 +2349,9 @@ var
 begin
   LHandled := False;
 
+  if ColCount = 0 then
+    Exit;
+
   if ARow = 0 then
     ResizeSearchEdit(ACol);
   if (ARow > 0) and Assigned(FDataSource) then
@@ -2360,6 +2372,8 @@ var
   LCol, LRow: longint;
   LContains: boolean = false;
 begin
+  if ColCount = 0 then
+    Exit;
   if Button = mbRight then
     if (SelectionType <> stNone) and Assigned(FOnPreparePopupMenu) and
        (FDrawGrid.MouseToGridZone(X, Y) = gzNormal) then
@@ -2411,6 +2425,8 @@ procedure TCustomVisualGrid.GridHeaderClick(Sender: TObject; IsColumn: Boolean;
 var
   LColumn: TVisualColumn;
 begin
+  if ColCount = 0 then
+    Exit;
   if Index >= Length(ActiveDataTable.Columns) then
     raise EVisualGridError.CreateFmt(sImproperColumnIndex, [Length(ActiveDataTable.Columns)-1,Index]);
 
