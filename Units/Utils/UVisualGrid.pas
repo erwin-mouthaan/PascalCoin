@@ -84,6 +84,18 @@ type
        function Evaluate (constref AValue: T) : boolean;
    end;
 
+  {TColumnFieldComparer }
+
+  TColumnFieldComparer<T> = class (TInterfacedObject, IComparer<T>)
+    private
+      FFilter : TColumnFilter;
+      FDelegate: TApplySortDelegate<T>;
+    public
+      constructor Create(const AFilter : TColumnFilter; const ADelegate: TApplySortDelegate<T>);
+      function Compare(constref ALeft, ARight: T): Integer; virtual;
+  end;
+
+
   { TPageFetchParams }
 
   TPageFetchParams = record
@@ -124,19 +136,19 @@ type
   end;
 
   { TCustomDataSource }
-
+// TODO: split  into TBindedDataSource <- TCustomDataSource
   TCustomDataSource<T> = class(TComponent, IDataSource)
     private
       FLock : TCriticalSection;
       FColumns : TTableColumns;
-      function ApplyColumnSort(const Left : T; const Right : T; const AFilter: TColumnFilter) : Integer; virtual;
-      function ApplyColumnFilter(const AItem: T; const AFilter: TColumnFilter) : boolean; virtual;
     protected
       function GetNullPolicy(const AFilter : TColumnFilter) : TSortNullPolicy; virtual;
       function GetItemDisposePolicy : TItemDisposePolicy; virtual; abstract;
       function GetColumns : TTableColumns; virtual; abstract;
+      function ApplyColumnSort(const Left : T; const Right : T; const AFilter: TColumnFilter) : Integer; virtual;
+      function ApplyColumnFilter(const AItem: T; const AFilter: TColumnFilter) : boolean; virtual;
     public
-      constructor Create(AOwner: TComponent); overload;
+      constructor Create(AOwner: TComponent); override;
       destructor Destroy; override;
       function FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
       function GetSearchCapabilities: TSearchCapabilities; virtual; abstract;
@@ -473,7 +485,7 @@ procedure Register;
 
 implementation
 
-uses Variants, UAutoScope;
+uses Variants, UAutoScope, Dialogs;
 
 {$IFDEF WINDOWS}
 {$R *.rc}
@@ -595,6 +607,7 @@ begin
   end else Result := false;
 end;
 
+
 function TCustomDataSource<T>.FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
 var
   i, j : SizeInt;
@@ -604,6 +617,7 @@ var
   entity : T;
   comparer : IComparer<T>;
   filter : IPredicate<T>;
+  xxx : boolean;
 begin
   FLock.Acquire;
   try
@@ -611,8 +625,14 @@ begin
      data := GC.AddObject( TList<T>.Create ) as TList<T>;
      FetchAll(data);
 
+     // NEED TO CONFIRM TEST OF Comparer/Filter API
      // Filter the data
+          Writeln('before filter construct');
      filter := TVisualGridTool<T>.ConstructRowPredicate(AParams.Filter, ApplyColumnFilter, true);
+
+     Writeln('before evalulate');
+     xxx := filter.Evaluate(data[0]);
+     Writeln('before filter');
      TListTool<T>.Filter(data, filter);
 
      // UGrids.pas(111,95) Error: Incompatible type for arg no. 2: Got "TCustomDataSource$1.ApplyColumnFilter(const TAccount;const TColumnFilter):Boolean;", expected "<procedure variable type of function(const <undefined type>;const TColumnFilter):Boolean of object;Register>"
@@ -650,8 +670,6 @@ begin
     FLock.Release;
   end;
 end;
-
-
 
 { TVisualGridCaption }
 
@@ -866,7 +884,6 @@ begin
   inherited Destroy;
 end;
 
-
 { TColumnFilterPredicate }
 
 constructor TColumnFilterPredicate<T>.Create(const AFilter : TColumnFilter; const ADelegate : TApplyFilterDelegate);
@@ -880,6 +897,18 @@ begin
   Result := FDelegate(AValue, FFilter);
 end;
 
+{ TColumnFieldComparer }
+
+constructor TColumnFieldComparer<T>.Create(const AFilter : TColumnFilter; const ADelegate: TApplySortDelegate<T>);
+begin
+  FFilter := AFilter;
+  FDelegate := ADelegate;
+end;
+
+function TColumnFieldComparer<T>.Compare(constref ALeft, ARight: T): Integer;
+begin
+  Result := FDelegate(ALeft, ARight, FFilter);
+end;
 
 { TVisualGridTool }
 
@@ -892,16 +921,16 @@ var
   filter : TColumnFilter;
   GC : TScoped;
 begin
-{  comparers := GC.AddObject(  TList<__IComparer_T>.Create ) as TList<__IComparer_T>;
+  comparers := GC.AddObject(  TList<__IComparer_T>.Create ) as TList<__IComparer_T>;
   for i := Low(AFilterCriteria) to High(AFilterCriteria) do begin
     filter := AFilterCriteria[i];
     if filter.Sort <> sdNone then
-      comparers.Add( TApplySortComparer.Create( filter ) );
+      comparers.Add( TColumnFieldComparer<T>.Create( filter, ADelegate ) );
   end;
   if comparers.Count = 0 then
-    Result := TComparer<TAccount>.Create('Account', sdAscending)
+    Result := TComparerTool<T>.AlwaysEqual
   else
-    Result := TManyComparer<TAccount>.Construct(comparers);  }
+    Result := TComparerTool<T>.Many(comparers);
 end;
 
 class function TVisualGridTool<T>.ConstructRowPredicate(const AFilterCriteria : TFilterCriteria; const ADelegate : TApplyFilterDelegate<T>; const AndOrSwitch : boolean) : IPredicate<T>;
@@ -2050,7 +2079,6 @@ begin
   LRect := FDrawGrid.CellRect(ACol,0);
   LEdit.FPanel.SetBounds(LRect.Left + 1, 0, LRect.Width - 2, LEdit.FEdit.Height);
 end;
-
 
 procedure TCustomVisualGrid.RefreshPageIndexAndGridInterface;
 begin

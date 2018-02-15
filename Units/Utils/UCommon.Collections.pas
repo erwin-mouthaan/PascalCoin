@@ -15,31 +15,31 @@ type
 
   // Note: this tries to follow pattern from Generics.Collections for supporting nested/object/global delegates.
 
-  TNestedComparison<T> = function (constref Left, Right: T): Integer is nested;
+  TNestedComparerFunc<T> = function (constref Left, Right: T): Integer is nested;
 
-  TNestedComparer<T> = class(TComparer<T>)
-     private
-       FComparer: TNestedComparison<T>;
-     public
-       constructor Create(const comparer: TNestedComparison<T>);
-       function Compare(constref Left, Right: T): Integer; override;
-   end;
+  TObjectComparerFunc<T> = function (constref Left, Right: T): Integer of object;
 
-  TManyComparer<T> = class(TInterfacedObject, IComparer<T>)
-     private type
-       IComparer_T = IComparer<T>;
-     private
-       FComparers : TArray<IComparer_T>;
-     public
-       constructor Create(const comparers: TArray<IComparer_T>); overload;
-       destructor Destroy; override;
-       function Compare(constref Left, Right: T): Integer;
-       class function Construct(const comparers: array of TNestedComparison<T>) : IComparer<T>; overload;
-       class function Construct(const comparers: array of TOnComparison<T>) : IComparer<T>; overload;
-       class function Construct(const comparers: array of TComparisonFunc<T>) : IComparer<T>; overload;
-       class function Construct(const comparers: array of TComparer<T>) : IComparer<T>; overload;
-       class function Construct(const comparers: TEnumerable<IComparer_T>) : IComparer<T>; overload;
-   end;
+  TGlobalComparerFunc<T> = function (constref Left, Right: T): Integer;
+
+  { TComparerTool }
+
+  TComparerTool<T> = class
+    private type
+      __IComparer_T = IComparer<T>;
+    public
+      class function FromFunc(const AFunc: TNestedComparerFunc<T>) : IComparer<T>; overload;
+      class function FromFunc(const AFunc: TObjectComparerFunc<T>) : IComparer<T>; overload;
+      class function FromFunc(const AFunc: TGlobalComparerFunc<T>) : IComparer<T>; overload;
+      class function Many(const comparers: array of TNestedComparerFunc<T>) : IComparer<T>; overload;
+      class function Many(const comparers: array of TObjectComparerFunc<T>) : IComparer<T>; overload;
+      class function Many(const comparers: array of TGlobalComparerFunc<T>) : IComparer<T>; overload;
+      class function Many(const comparers: array of IComparer<T>) : IComparer<T>; overload;
+      class function Many(const comparers: TEnumerable<__IComparer_T>) : IComparer<T>; overload;
+      class function AlwaysEqual : IComparer<T>; static;
+    private
+      // These should be nested but FPC doesn't support nested functions in generics
+      class function AlwaysEqualHandler(const Left, Right: T) : Integer; static;
+  end;
 
   { Predicate API }
 
@@ -57,17 +57,17 @@ type
 
   TPredicateTool<T> = class
     public
-      class function FromNestedFunc(AFunc: TNestedPredicateFunc<T>) : IPredicate<T>;
-      class function FromObjectFunc(AFunc: TObjectPredicateFunc<T>) : IPredicate<T>;
-      class function FromGlobalFunc(AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>;
+      class function FromFunc(AFunc: TNestedPredicateFunc<T>) : IPredicate<T>; overload;
+      class function FromFunc(AFunc: TObjectPredicateFunc<T>) : IPredicate<T>; overload;
+      class function FromFunc(AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>; overload;
       class function AndMany( APredicates : array of IPredicate<T>) : IPredicate<T>;
       class function OrMany( APredicates : array of IPredicate<T>) : IPredicate<T>;
       class function AlwaysTrue : IPredicate<T>;
       class function AlwaysFalse : IPredicate<T>;
     private
       // These should be nested but FPC doesn't support nested functions in generics
-      function TrueHandler(const AItem: T) : boolean;
-      function FalseHandler(const AItem: T) : boolean;
+      class function TrueHandler(const AItem: T) : boolean; static;
+      class function FalseHandler(const AItem: T) : boolean; static;
   end;
 
   { TListTool }
@@ -82,80 +82,220 @@ type
     class procedure DiposeItem(const AList: TList<T>; index : SizeInt; ADisposePolicy : TItemDisposePolicy);
   end;
 
-    { Private types - cannot be declared in implementation due to FPC bug }
+  { Private types (implementation only) - FPC Bug 'Global Generic template references static symtable' }
 
-    type
-      TNestedPredicate<T> = class (TInterfacedObject, IPredicate<T>)
-         private
-           FFunc : TNestedPredicateFunc<T>;
-         public
-           constructor Create(AFunc: TNestedPredicateFunc<T>);
-           function Evaluate (constref AValue: T) : boolean;
-       end;
+  TNestedComparer<T> = class(TInterfacedObject, IComparer<T>)
+   private
+     FFunc: TNestedComparerFunc<T>;
+   public
+     constructor Create(const AComparerFunc: TNestedComparerFunc<T>); overload;
+     function Compare(constref Left, Right: T): Integer;
+  end;
 
-       TObjectPredicate<T> = class (TInterfacedObject, IPredicate<T>)
-         private
-           FFunc : TObjectPredicateFunc<T>;
-         public
-           constructor Create(AFunc: TObjectPredicateFunc<T>);
-           function Evaluate (constref AValue: T) : boolean;
-       end;
+  TObjectComparer<T> = class(TInterfacedObject, IComparer<T>)
+   private
+     FFunc: TObjectComparerFunc<T>;
+   public
+     constructor Create(const AComparerFunc: TObjectComparerFunc<T>); overload;
+     function Compare(constref Left, Right: T): Integer;
+  end;
 
-       TGlobalPredicate<T> = class (TInterfacedObject, IPredicate<T>)
-         private
-           FFunc : TGlobalPredicateFunc<T>;
-         public
-           constructor Create(AFunc: TGlobalPredicateFunc<T>);
-           function Evaluate (constref AValue: T) : boolean;
-       end;
+  TGlobalComparer<T> = class(TInterfacedObject, IComparer<T>)
+   private
+     FFunc: TGlobalComparerFunc<T>;
+   public
+     constructor Create(const AComparerFunc: TGlobalComparerFunc<T>); overload;
+     function Compare(constref Left, Right: T): Integer;
+  end;
 
-       TAndManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
-         private type
-           __IPredicate = IPredicate<T>;
-           __TArrayTool = TArrayTool<__IPredicate>;
-         private
-           FPredicates : array of IPredicate<T>;
-         public
-           constructor Create(const APredicates: array of IPredicate<T>);
-           function Evaluate (constref AValue: T) : boolean;
-       end;
+  TManyComparer<T> = class(TInterfacedObject, IComparer<T>)
+     private type
+       IComparer_T = IComparer<T>;
+     private
+       FComparers : TArray<IComparer_T>;
+     public
+       constructor Create(const comparers: TArray<IComparer_T>); overload;
+       function Compare(constref Left, Right: T): Integer;
+   end;
 
-       TOrManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
-         private type
-           __IPredicate = IPredicate<T>;
-           __TArrayTool = TArrayTool<__IPredicate>;
-         private
-           FPredicates : array of IPredicate<T>;
-         public
-           constructor Create(const APredicates: array of IPredicate<T>);
-           function Evaluate (constref AValue: T) : boolean;
-       end;
+  TNestedPredicate<T> = class (TInterfacedObject, IPredicate<T>)
+   private
+     FFunc : TNestedPredicateFunc<T>;
+   public
+     constructor Create(AFunc: TNestedPredicateFunc<T>); overload;
+     function Evaluate (constref AValue: T) : boolean;
+  end;
+
+  TObjectPredicate<T> = class (TInterfacedObject, IPredicate<T>)
+   private
+     FFunc : TObjectPredicateFunc<T>;
+   public
+     constructor Create(AFunc: TObjectPredicateFunc<T>); overload;
+     function Evaluate (constref AValue: T) : boolean;
+  end;
+
+  TGlobalPredicate<T> = class (TInterfacedObject, IPredicate<T>)
+   private
+     FFunc : TGlobalPredicateFunc<T>;
+   public
+     constructor Create(AFunc: TGlobalPredicateFunc<T>); overload;
+     function Evaluate (constref AValue: T) : boolean;
+  end;
+
+  TAndManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
+   private type
+     __IPredicate = IPredicate<T>;
+     __TArrayTool = TArrayTool<__IPredicate>;
+   private
+     FPredicates : array of IPredicate<T>;
+   public
+     constructor Create(const APredicates: array of IPredicate<T>); overload;
+     function Evaluate (constref AValue: T) : boolean;
+  end;
+
+  TOrManyPredicate<T> =  class (TInterfacedObject, IPredicate<T>)
+   private type
+     __IPredicate = IPredicate<T>;
+     __TArrayTool = TArrayTool<__IPredicate>;
+   private
+     FPredicates : array of IPredicate<T>;
+   public
+     constructor Create(const APredicates: array of IPredicate<T>); overload;
+     function Evaluate (constref AValue: T) : boolean;
+  end;
 
 
 implementation
 
 {%region Comparer API}
 
-constructor TNestedComparer<T>.Create(const comparer: TNestedComparison<T>);
+class function TComparerTool<T>.FromFunc(const AFunc: TNestedComparerFunc<T>) : IComparer<T>;
 begin
-  FComparer := comparer;
+  Result := TNestedComparer<T>.Create(AFunc);
+end;
+
+class function TComparerTool<T>.FromFunc(const AFunc: TObjectComparerFunc<T>) : IComparer<T>;
+begin
+  Result := TObjectComparer<T>.Create(AFunc);
+end;
+
+class function TComparerTool<T>.FromFunc(const AFunc: TGlobalComparerFunc<T>) : IComparer<T>;
+begin
+  Result := TGlobalComparer<T>.Create(AFunc);
+end;
+
+class function TComparerTool<T>.Many(const comparers: array of TNestedComparerFunc<T>) : IComparer<T>;
+var
+  i : Integer;
+  internalComparers : TArray<__IComparer_T>;
+begin
+  SetLength(internalComparers, Length(comparers));
+  for i := 0 to High(comparers) do
+    internalComparers[i] := TNestedComparer<T>.Create(comparers[i]);
+  Result := TManyComparer<T>.Create(internalComparers);
+end;
+
+class function TComparerTool<T>.Many(const comparers: array of TObjectComparerFunc<T>) : IComparer<T>;
+var
+  i : Integer;
+  internalComparers : TArray<__IComparer_T>;
+begin
+  SetLength(internalComparers, Length(comparers));
+  for i := 0 to High(comparers) do
+    internalComparers[i] := TObjectComparer<T>.Create(comparers[i]);
+  Result := TManyComparer<T>.Create(internalComparers);
+end;
+
+class function TComparerTool<T>.Many(const comparers: array of TGlobalComparerFunc<T>) : IComparer<T>;
+var
+  i : Integer;
+  internalComparers : TArray<__IComparer_T>;
+begin
+  SetLength(internalComparers, Length(comparers));
+  for i := 0 to High(comparers) do
+    internalComparers[i] := TGlobalComparer<T>.Create(comparers[i]);
+  Result := TManyComparer<T>.Create(internalComparers);
+end;
+
+class function TComparerTool<T>.Many(const comparers: array of IComparer<T>) : IComparer<T>;
+var
+  i : Integer;
+  internalComparers : TArray<__IComparer_T>;
+begin
+  SetLength(internalComparers, Length(comparers));
+  for i := 0 to High(comparers) do
+    internalComparers[i] := __IComparer_T(comparers[i]);
+  Result := TManyComparer<T>.Create(internalComparers);
+end;
+
+class function TComparerTool<T>.Many(const comparers: TEnumerable<__IComparer_T>) : IComparer<T>;
+var
+  i : integer;
+  comparer : __IComparer_T;
+  internalComparers : TArray<__IComparer_T>;
+begin
+  for comparer in comparers do begin
+    SetLength(internalComparers, Length(internalComparers) + 1);
+    internalComparers[High(internalComparers)] := comparer;
+  end;
+  Result := TManyComparer<T>.Create(internalComparers);
+end;
+
+class function TComparerTool<T>.AlwaysEqual : IComparer<T>;
+type
+  __TGlobalComparerFunc_T = TGlobalComparerFunc<T>;
+begin
+  Result :=  TComparerTool<T>.FromFunc( __TGlobalComparerFunc_T(AlwaysEqualHandler) );
+end;
+
+class function TComparerTool<T>.AlwaysEqualHandler(const Left, Right: T) : Integer; static;
+begin
+  Result := 0;
+end;
+
+{ TNestedComparer }
+
+constructor TNestedComparer<T>.Create(const AComparerFunc: TNestedComparerFunc<T>);
+begin
+  FFunc := AComparerFunc;
 end;
 
 function TNestedComparer<T>.Compare(constref Left, Right: T): Integer;
 begin
-  Result := FComparer(Left, Right);
+  Result := FFunc(Left, Right);
 end;
+
+{ TObjectComparer }
+
+constructor TObjectComparer<T>.Create(const AComparerFunc: TObjectComparerFunc<T>);
+begin
+  FFunc := AComparerFunc;
+end;
+
+function TObjectComparer<T>.Compare(constref Left, Right: T): Integer;
+begin
+  Result := FFunc(Left, Right);
+end;
+
+{ TGlobalComparer }
+
+constructor TGlobalComparer<T>.Create(const AComparerFunc: TGlobalComparerFunc<T>);
+begin
+  FFunc := AComparerFunc;
+end;
+
+function TGlobalComparer<T>.Compare(constref Left, Right: T): Integer;
+begin
+  Result := FFunc(Left, Right);
+end;
+
+{ TManyComparer }
 
 constructor TManyComparer<T>.Create(const comparers: TArray<IComparer_T>);
 begin
   FComparers := comparers;
 end;
 
-destructor TManyComparer<T>.Destroy;
-begin
-  FComparers := nil;
-  inherited;
-end;
 
 function TManyComparer<T>.Compare(constref Left, Right: T): Integer;
 var
@@ -169,62 +309,6 @@ begin
   end;
 end;
 
-class function TManyComparer<T>.Construct(const comparers: array of TNestedComparison<T>) : IComparer<T>;
-var
-  i : Integer;
-  internalComparers : TArray<IComparer_T>;
-begin
-  SetLength(internalComparers, Length(comparers));
-  for i := 0 to High(comparers) do
-    internalComparers[i] := TNestedComparer<T>.Create(comparers[i]);
-  Create(internalComparers);
-end;
-
-class function TManyComparer<T>.Construct(const comparers: array of TOnComparison<T>) : IComparer<T>;
-var
-  i : Integer;
-  internalComparers : TArray<IComparer_T>;
-begin
-  SetLength(internalComparers, Length(comparers));
-  for i := 0 to High(comparers) do
-    internalComparers[i] := TComparer<T>.Construct(comparers[i]);
-  Create(internalComparers);
-end;
-
-class function TManyComparer<T>.Construct(const comparers: array of TComparisonFunc<T>) : IComparer<T>;
-var
-  i : Integer;
-  internalComparers : TArray<IComparer_T>;
-begin
-  SetLength(internalComparers, Length(comparers));
-  for i := 0 to High(comparers) do
-    internalComparers[i] := TComparer<T>.Construct(comparers[i]);
-  Create(internalComparers);
-end;
-
-class function TManyComparer<T>.Construct(const comparers: array of TComparer<T>) : IComparer<T>;
-var
-  i : Integer;
-  internalComparers : TArray<IComparer_T>;
-begin
-  SetLength(internalComparers, Length(comparers));
-  for i := 0 to High(comparers) do
-    internalComparers[i] := IComparer_T(comparers[i]);
-  Create(internalComparers);
-end;
-
-class function TManyComparer<T>.Construct(const comparers: TEnumerable<IComparer_T>) : IComparer<T>; overload;
-var
-  i : integer;
-  comparer : IComparer_T;
-  internalComparers : TArray<IComparer_T>;
-begin
-  for comparer in comparers do begin
-    SetLength(internalComparers, Length(internalComparers) + 1);
-    internalComparers[High(internalComparers)] := comparer;
-  end;
-  Create(internalComparers);
-end;
 
 {%endegion}
 
@@ -232,17 +316,17 @@ end;
 
 { TPredicateTool }
 
-class function TPredicateTool<T>.FromNestedFunc(AFunc: TNestedPredicateFunc<T>) : IPredicate<T>;
+class function TPredicateTool<T>.FromFunc(AFunc: TNestedPredicateFunc<T>) : IPredicate<T>;
 begin
   Result := TNestedPredicate<T>.Create(AFunc);
 end;
 
-class function TPredicateTool<T>.FromObjectFunc(AFunc: TObjectPredicateFunc<T>) : IPredicate<T>;
+class function TPredicateTool<T>.FromFunc(AFunc: TObjectPredicateFunc<T>) : IPredicate<T>;
 begin
   Result := TObjectPredicate<T>.Create(AFunc);
 end;
 
-class function TPredicateTool<T>.FromGlobalFunc(AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>;
+class function TPredicateTool<T>.FromFunc(AFunc: TGlobalPredicateFunc<T>) : IPredicate<T>;
 begin
   Result := TGlobalPredicate<T>.Create(AFunc);
 end;
@@ -259,22 +343,22 @@ end;
 
 class function TPredicateTool<T>.AlwaysTrue : IPredicate<T>;
 begin
-  Result := TObjectPredicate<T>.Create(TrueHandler);
+  Result := TPredicateTool<T>.FromFunc(TrueHandler);
 end;
 
 class function TPredicateTool<T>.AlwaysFalse : IPredicate<T>;
 begin
-  Result := TObjectPredicate<T>.Create(FalseHandler);
+  Result := TPredicateTool<T>.FromFunc(FalseHandler);
 end;
 
 // Shold be nested funcion but generics can't have in FPC!
-function TPredicateTool<T>.TrueHandler(const AItem: T) : boolean;
+class function TPredicateTool<T>.TrueHandler(const AItem: T) : boolean;
 begin
   Result := true;
 end;
 
 // Shold be nested funcion but generics can't have in FPC!
-function TPredicateTool<T>.FalseHandler(const AItem: T) : boolean;
+class function TPredicateTool<T>.FalseHandler(const AItem: T) : boolean;
 begin
   Result := true;
 end;

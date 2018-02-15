@@ -43,7 +43,7 @@ uses UGrids;
 procedure TCTRLWallet.FormCreate(Sender: TObject);
 begin
   FAccountsGrid := TVisualGrid.Create(Self);
-  FAccountsGrid.FetchDataInThread:= true;
+  //FAccountsGrid.FetchDataInThread:= true;
   FAccountsGrid.AutoPageSize:= true;
   FAccountsGrid.SelectionType:= stMultiRow;
   FAccountsGrid.DataSource := TMyAccountDataSource.Create(FAccountsGrid);

@@ -22,16 +22,10 @@ type
   { TMyAccountDataSource }
 
   TMyAccountDataSource = class(TCustomDataSource<TAccount>)
-    private
-      FIsStale : boolean;
-      FUserKeys : THashSet<TAccountKey>;
-      FUserAccounts : TList<TAccount>;
-      FSafeBox : TPCSafeBox;
     protected
       function GetItemDisposePolicy : TItemDisposePolicy; override;
       function GetColumns : TTableColumns;  override;
     public
-      constructor Create(AOwner : TComponent); overload;
       function GetSearchCapabilities: TSearchCapabilities; override;
       procedure FetchAll( AContainer : TList<TAccount>); override;
       function GetItemField(const AItem: TAccount; const AColumnName : AnsiString) : Variant; override;
@@ -43,15 +37,6 @@ implementation
 uses UWallet, UUserInterface, UAutoScope, UCommon.Collections;
 
 { TMyAccountDataSource }
-
-constructor TMyAccountDataSource.Create(AOwner : TComponent);
-begin
-  inherited Create(AOwner);
-  FUserKeys := THashSet<TAccountKey>.Create;
-  FUserAccounts := TList<TAccount>.Create;
-  FSafeBox := TUserInterface.Node.Bank.SafeBox;
-  FIsStale := true;
-end;
 
 function TMyAccountDataSource.GetItemDisposePolicy : TItemDisposePolicy;
 begin
@@ -78,28 +63,27 @@ begin
 end;
 
 
-procedure TMyAccountDataSource.FetchAll( AContainer : TList<T>);
+procedure TMyAccountDataSource.FetchAll( AContainer : TList<TAccount>);
 var
   i : integer;
   acc : TAccount;
+  FUserKeys : THashSet<TAccountKey>;
+  FSafeBox : TPCSafeBox;
+  GC : TScoped;
 begin
-   if NOT FIsStale then
-     exit;
-
+   FSafeBox := TUserInterface.Node.Bank.SafeBox;
    // load user keys
-   FUserKeys.Clear;
+   FUserKeys := GC.AddObject( THashSet<TAccountKey>.Create ) as THashSet<TAccountKey>;
    for i := 0 to TWallet.Keys.Count - 1 do
      FUserKeys.Add(TWallet.Keys.Key[i].AccountKey);
 
    // load user accounts
-   FUserAccounts.Clear;
+   AContainer.Clear;
    for i := 0 to FSafeBox.AccountsCount - 1 do begin
      acc := FSafeBox.Account(i);
      if FUserKeys.Contains(acc.accountInfo.accountKey) then
-       FUserAccounts.Add(acc);
+       AContainer.Add(acc);
    end;
-
-   FIsStale := false;
 end;
 
 
