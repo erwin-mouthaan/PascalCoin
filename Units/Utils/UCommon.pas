@@ -1134,9 +1134,9 @@ var
   i : SizeInt;
 begin
   if Count < 0 then raise EArgumentOutOfRangeException.Create('Count was less than 0');
-  if (FromIndex + Count) > High(AArray) then raise EArgumentOutOfRangeException.Create('FromIndex + Count was greater than High(AArray)');
+  if (FromIndex + Count - 1) > High(AArray) then raise EArgumentOutOfRangeException.Create('FromIndex + Count was greater than High(AArray)');
   SetLength(Result, Count);
-  for i:= FromIndex to FromIndex + Count do
+  for i:= FromIndex to FromIndex + Count - 1 do
     Result[i - FromIndex] := AArray[i];
 end;
 

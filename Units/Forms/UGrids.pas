@@ -28,8 +28,8 @@ type
     public
       function GetSearchCapabilities: TSearchCapabilities; override;
       procedure FetchAll(const AContainer : TList<TAccount>); override;
-      function GetItemField(constref AItem: TAccount; const AColumnName : AnsiString) : Variant; override;
-      procedure DehydrateItem(constref AItem: TAccount; const ATableRow: Variant); override;
+      function GetItemField(constref AItem: TAccount; const AColumnName : utf8string) : Variant; override;
+      procedure DehydrateItem(constref AItem: TAccount; var ATableRow: Variant); override;
   end;
 
 implementation
@@ -86,9 +86,9 @@ begin
 end;
 
 
-function TMyAccountDataSource.GetItemField(constref AItem: TAccount; const AColumnName : AnsiString) : Variant;
+function TMyAccountDataSource.GetItemField(constref AItem: TAccount; const AColumnName : utf8string) : Variant;
 begin
-   if AColumnName = 'Account' then
+  { if AColumnName = 'Account' then
      Result := AItem.account
    else if AColumnName = 'Name' then
      Result := AItem.name
@@ -104,10 +104,11 @@ begin
      Result := AItem.accountInfo.price
    else if AColumnName = 'LockedUntil' then
      Result := AItem.accountInfo.locked_until_block
-   else raise Exception.Create(Format('Field not found [%s]', [AColumnName]));
+   else raise Exception.Create(Format('Field not found [%s]', [AColumnName]));  }
+   REsult := 'hello';
 end;
 
-procedure TMyAccountDataSource.DehydrateItem(constref AItem: TAccount; const ATableRow: Variant);
+procedure TMyAccountDataSource.DehydrateItem(constref AItem: TAccount; var ATableRow: Variant);
 begin
   // 'Account', 'Name', 'Balance', 'Key', 'Type', 'State', 'Price', 'LockedUntil'
   ATableRow.Account := TAccountComp.AccountNumberToAccountTxtNumber(AItem.account);

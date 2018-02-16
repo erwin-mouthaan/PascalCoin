@@ -58,11 +58,11 @@ type
 
   { TApplyFilterDelegate }
 
-  TApplyFilterDelegate<T> = function (constref AItem : T; const AColumnFilter: TColumnFilter) : boolean of object;
+  TApplyFilterDelegate<T> = function (constref AItem : T; constref AColumnFilter: TColumnFilter) : boolean of object;
 
   { TApplySortDelegate }
 
-  TApplySortDelegate<T> = function (constref Left, Right : T; const AColumnFilter: TColumnFilter) : Integer of object;
+  TApplySortDelegate<T> = function (constref Left, Right : T; constref AColumnFilter: TColumnFilter) : Integer of object;
 
   { TDataTable }
 
@@ -145,16 +145,16 @@ type
       function GetNullPolicy(const AFilter : TColumnFilter) : TSortNullPolicy; virtual;
       function GetItemDisposePolicy : TItemDisposePolicy; virtual; abstract;
       function GetColumns : TTableColumns; virtual; abstract;
-      function ApplyColumnSort(constref Left, Right : T; const AFilter: TColumnFilter) : Integer; virtual;
-      function ApplyColumnFilter(constref AItem: T; const AFilter: TColumnFilter) : boolean; virtual;
+      function ApplyColumnSort(constref Left, Right : T; constref AFilter: TColumnFilter) : Integer; virtual;
+      function ApplyColumnFilter(constref AItem: T; constref AFilter: TColumnFilter) : boolean; virtual;
+      function GetItemField(constref AItem: T; const AColumnName : utf8string) : Variant; virtual; abstract;
+      procedure DehydrateItem(constref AItem: T; var ATableRow: Variant); virtual; abstract;
     public
       constructor Create(AOwner: TComponent); override;
       destructor Destroy; override;
       function FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
       function GetSearchCapabilities: TSearchCapabilities; virtual; abstract;
       procedure FetchAll(const AContainer : TList<T>); virtual; abstract;
-      function GetItemField(constref AItem: T; const AColumnName : AnsiString) : Variant; virtual; abstract;
-      procedure DehydrateItem(constref AItem: T; const ATableRow: Variant); virtual; abstract;
   end;
 
   { TVisualGridSelection }
@@ -466,8 +466,8 @@ type
 
   TVisualGridTool<T> = class
     public
-     class function ConstructRowComparer(const AFilterCriteria : TFilterCriteria; const ADelegate : TApplySortDelegate<T>) : IComparer<T>;
-     class function ConstructRowPredicate(const AFilterCriteria : TFilterCriteria; const ADelegate : TApplyFilterDelegate<T>; const AndOrSwitch : boolean) : IPredicate<T>;
+     class function ConstructRowComparer(constref AFilterCriteria : TFilterCriteria; const ADelegate : TApplySortDelegate<T>) : IComparer<T>;
+     class function ConstructRowPredicate(constref AFilterCriteria : TFilterCriteria; const ADelegate : TApplyFilterDelegate<T>; const AndOrSwitch : boolean) : IPredicate<T>;
      class function MatchTextExact(const AValue : Variant; const AParams: array of Variant) : boolean;
      class function MatchTextBeginning(const AValue : Variant; const AParams: array of Variant) : boolean;
      class function MatchTextEnd(const AValue : Variant; const AParams: array of Variant) : boolean;
@@ -550,7 +550,7 @@ begin
   end;
 end;
 
-function TCustomDataSource<T>.ApplyColumnSort(constref Left, Right : T; const AFilter: TColumnFilter) : Integer;
+function TCustomDataSource<T>.ApplyColumnSort(constref Left, Right : T; constref AFilter: TColumnFilter) : Integer;
 var
   leftField, rightField : Variant;
   leftType, rightType : Integer;
@@ -582,7 +582,7 @@ begin
     Result := Result * -1;
 end;
 
-function TCustomDataSource<T>.ApplyColumnFilter(constref AItem: T; const AFilter: TColumnFilter) : boolean;
+function TCustomDataSource<T>.ApplyColumnFilter(constref AItem: T; constref AFilter: TColumnFilter) : boolean;
 var
   value : Variant;
 begin
@@ -607,7 +607,6 @@ begin
   end else Result := false;
 end;
 
-
 function TCustomDataSource<T>.FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
 var
   i, j : SizeInt;
@@ -617,7 +616,6 @@ var
   entity : T;
   comparer : IComparer<T>;
   filter : IPredicate<T>;
-  xxx : boolean;
 begin
   FLock.Acquire;
   try
@@ -628,23 +626,23 @@ begin
      // NEED TO CONFIRM TEST OF Comparer/Filter API
      // Filter the data
      filter := TVisualGridTool<T>.ConstructRowPredicate(AParams.Filter, ApplyColumnFilter, true);
-     TListTool<T>.Filter(data, filter);
+     TListTool<T>.FilterBy(data, filter);
 
      // UGrids.pas(111,95) Error: Incompatible type for arg no. 2: Got "TCustomDataSource$1.ApplyColumnFilter(const TAccount;const TColumnFilter):Boolean;", expected "<procedure variable type of function(const <undefined type>;const TColumnFilter):Boolean of object;Register>"
 
      // Sort the data
-     comparer := TVisualGridTool<T>.ConstructRowComparer(AParams.Filter, ApplyColumnSort);
-     data.Sort( comparer);
+     //comparer := TVisualGridTool<T>.ConstructRowComparer(AParams.Filter, ApplyColumnSort);
+     //data.Sort( comparer);
 
      // Setup result
      Result.TotalDataCount := data.Count;
      Result.PageCount := data.Count div AParams.PageSize;
-     if AParams.PageIndex >= 0 then begin
+     if (AParams.PageSize >= 0) then begin
        Result.PageIndex := ClipValue(AParams.PageIndex, 0, Result.PageCount - 1);
-       pageStart := Result.PageIndex * AParams.PageSize;
+       pageStart := Result.PageIndex  * AParams.PageSize;
        pageEnd := pageStart + (AParams.PageSize - 1);
      end else begin
-       Result.PageIndex := AParams.PageIndex;
+       Result.PageIndex := 0;
        pageStart := 0;
        pageEnd := data.Count - 1;
      end;
@@ -657,6 +655,7 @@ begin
      SetLength(ADataTable.Rows, pageEnd - pageStart + 1);
      for i := pageStart to pageEnd do begin
        ADataTable.Rows[j] := TTableRow.New(@FColumns);
+       //ADataTable.Rows[j].Name := 'test';
        DehydrateItem( data[i], ADataTable.Rows[j]);
        inc(j)
      end;
@@ -883,6 +882,9 @@ end;
 
 constructor TColumnFilterPredicate<T>.Create(const AFilter : TColumnFilter; const ADelegate : TApplyFilterDelegate);
 begin
+  if NOT Assigned(ADelegate) then
+    raise EArgumentException.Create('ADelegate is null or unassigned');
+
   FFilter := AFilter;
   FDelegate := ADelegate;
 end;
@@ -907,7 +909,7 @@ end;
 
 { TVisualGridTool }
 
-class function TVisualGridTool<T>.ConstructRowComparer(const AFilterCriteria : TFilterCriteria; const ADelegate : TApplySortDelegate<T>) : IComparer<T>;
+class function TVisualGridTool<T>.ConstructRowComparer(constref AFilterCriteria : TFilterCriteria; const ADelegate : TApplySortDelegate<T>) : IComparer<T>;
 type
   __IComparer_T = IComparer<T>;
 var
@@ -922,19 +924,23 @@ begin
     if filter.Sort <> sdNone then
       comparers.Add( TColumnFieldComparer<T>.Create( filter, ADelegate ) );
   end;
-  if comparers.Count = 0 then
-    Result := TComparerTool<T>.AlwaysEqual
-  else
-    Result := TComparerTool<T>.Many(comparers);
+
+  case comparers.Count of
+    0: Result := TComparerTool<T>.AlwaysEqual;
+    1: Result := comparers[0];
+    else Result := TComparerTool<T>.Many(comparers);
+  end;
 end;
 
-class function TVisualGridTool<T>.ConstructRowPredicate(const AFilterCriteria : TFilterCriteria; const ADelegate : TApplyFilterDelegate<T>; const AndOrSwitch : boolean) : IPredicate<T>;
+class function TVisualGridTool<T>.ConstructRowPredicate(constref AFilterCriteria : TFilterCriteria; const ADelegate : TApplyFilterDelegate<T>; const AndOrSwitch : boolean) : IPredicate<T>;
 var
   arrayOfPredicates : array of IPredicate<T>;
   i : integer;
 begin
   if Length(AFilterCriteria) = 0 then begin
-    Result := TPredicateTool<T>.AlwaysTrue; // if no sub-predicates, row is considered true
+    Result := TPredicateTool<T>.TruePredicate; // if no sub-predicates, row is considered true
+  end else if Length(AFilterCriteria) = 1 then begin
+    Result := TColumnFilterPredicate<T>.Create(AFilterCriteria[0], @ADelegate);
   end else begin
     SetLength(arrayOfPredicates, Length(AFilterCriteria));
     for i := 0 to High(AFilterCriteria) do

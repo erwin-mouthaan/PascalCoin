@@ -453,12 +453,13 @@
     </Parsing>
     <CodeGeneration>
       <Optimizations>
-        <OptimizationLevel Value="2"/>
+        <OptimizationLevel Value="0"/>
       </Optimizations>
     </CodeGeneration>
     <Linking>
       <Debugging>
-        <UseValgrind Value="True"/>
+        <DebugInfoType Value="dsDwarf2Set"/>
+        <UseLineInfoUnit Value="False"/>
       </Debugging>
       <Options>
         <Win32>
