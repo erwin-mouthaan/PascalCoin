@@ -428,17 +428,9 @@ end;
 class function TPredicateTool<T>.OrMany(const APredicates : array of IPredicate<T>) : IPredicate<T>;
 type
   __TArrayTool_IPredicate_T = TArrayTool<__IPredicate_T>;
-var
-  arr : TArray<__IPredicate_T>;
-  i : Integer;
 begin
-  SetLength(arr, Length(APredicates));
-  for i := 0 to High(APredicates) do
-    arr[i] := APredicates[i];
-  //arr := __TArrayTool_IPredicate_T.Copy( APredicates);  // TODO: fix ArrayTool.Copy
-  Result := TOrManyPredicate<T>.Create( arr );
+  Result := TOrManyPredicate<T>.Create( __TArrayTool_IPredicate_T.Copy( APredicates) );
 end;
-
 
 class function TPredicateTool<T>.OrMany(const APredicates : array of TNestedPredicateFunc<T>) : IPredicate<T>;
 var
@@ -652,17 +644,17 @@ var
   item : T;
 begin
   Result := 0;
-  i := 0;
-  while i < AList.Count do begin
+  i := AList.Count-1;
+  while i >= 0 do begin
     item := AList[i];
     if APredicate.Evaluate(item) then begin
       DiposeItem(AList, i, ADisposePolicy);
       AList.Delete(i);
       inc(Result);
-    end else Inc(i);
+    end;
+    Dec(i);
   end;
 end;
-
 
 class function TListTool<T>.FilterBy(const AList: TList<T>; const APredicate: IPredicate<T>) : SizeInt;
 begin
@@ -673,7 +665,6 @@ class function TListTool<T>.FilterBy(const AList: TList<T>; const APredicate: IP
 begin
   Result := RemoveBy(AList, TPredicateTool<T>.NegatePredicate ( APredicate ) );
 end;
-
 
 class procedure TListTool<T>.DiposeItem(const AList: TList<T>; const index : SizeInt; const ADisposePolicy : TItemDisposePolicy);
 var

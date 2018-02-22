@@ -56,8 +56,6 @@ function IIF(const ACondition: Boolean; const ATrueResult, AFalseResult: variant
 function GetSetName(const aSet:PTypeInfo; Value: Integer):string;
 function GetSetValue(const aSet:PTypeInfo; Name: String): Integer;
 
-
-
 { Clip Value }
 function ClipValue( AValue, MinValue, MaxValue: Integer) : Integer;
 
@@ -291,6 +289,31 @@ type
       class function ToArray(Enumerable: TEnumerable<T>; Count: SizeInt): TArray<T>; static;
   end;
 
+  { TVariantTool }
+
+  TVariantTool = class
+    public
+      class function IsNumeric(const AValue : Variant) : boolean;
+      class function TryParseBool(const AValue : Variant; out ABoolean : boolean) : boolean;
+      class function VarToInt(const AVariant: Variant): integer;
+      class function MatchTextExact(const AValue, AMatch : Variant) : boolean;
+      class function MatchTextBeginning(const AValue, AMatch : Variant) : boolean;
+      class function MatchTextEnd(const AValue, AMatch : Variant) : boolean;
+      class function MatchTextAnywhere(const AValue, AMatch : Variant) : boolean;
+      class function NumericEQ(const AValue, AMatch : Variant) : boolean;
+      class function NumericLT(const AValue, AMatch : Variant) : boolean;
+      class function NumericLTE(const AValue, AMatch : Variant) : boolean;
+      class function NumericGT(const AValue, AMatch : Variant) : boolean;
+      class function NumericGTE(const AValue, AMatch : Variant) : boolean;
+      class function NumericBetweenInclusive(const AValue, Lower, Upper : Variant) : boolean;
+      class function NumericBetweenExclusive(const AValue, Lower, Upper : Variant) : boolean;
+  end;
+
+  { TFileTool }
+
+  TFileTool = class
+    class procedure AppendText(const AFileName: string; const AText: string);
+  end;
 
 { COMPLEX CONSTANTS }
 
@@ -322,6 +345,9 @@ const
 
 var
   MinTimeStampDateTime : TDateTime = 0;
+  VarTrue : Variant;
+  VarFalse : Variant;
+
 
 {%region Global functions }
 
@@ -392,22 +418,22 @@ end;
 
 function TTimeSpan.GetTotalDays: Double;
 begin
-  Result := Double(FMillis) / Double(MillisPerDay);
+  Result := FMillis / MillisPerDay;
 end;
 
 function TTimeSpan.GetTotalHours: Double;
 begin
-  Result := Double(FMillis) / Double(MillisPerHour);
+  Result := FMillis / MillisPerHour;
 end;
 
 function TTimeSpan.GetTotalMinutes: Double;
 begin
-  Result := Double(FMillis) / Double(MillisPerMinute);
+  Result := FMillis / MillisPerMinute;
 end;
 
 function TTimeSpan.GetTotalSeconds: Double;
 begin
-  Result := Double(FMillis) / Double(MillisPerSecond);
+  Result := FMillis / MillisPerSecond;
 end;
 
 function TTimeSpan.GetTotalMilliseconds: Double;
@@ -461,23 +487,25 @@ begin
 end;
 
 class function TTimeSpan.FromDays(Value: Double): TTimeSpan;
+var xxx : double;
 begin
-  Result.FMillis := Round(Value * Double(MillisPerDay));
+  xxx := MillisPerDay;
+  Result.FMillis := Round(Value * MillisPerDay);
 end;
 
 class function TTimeSpan.FromHours(Value: Double): TTimeSpan; static;
 begin
-  Result.FMillis := Round(Value * Double(MillisPerHour));
+  Result.FMillis := Round(Value * MillisPerHour);
 end;
 
 class function TTimeSpan.FromMinutes(Value: Double): TTimeSpan; static;
 begin
-  Result.FMillis := Round(Value * Double(MillisPerMinute));
+  Result.FMillis := Round(Value * MillisPerMinute);
 end;
 
 class function TTimeSpan.FromSeconds(Value: Double): TTimeSpan; static;
 begin
-  Result.FMillis := Round(Value * Double(MillisPerSecond));
+  Result.FMillis := Round(Value * MillisPerSecond);
 end;
 
 class function TTimeSpan.FromMilliseconds(Value: Double): TTimeSpan; static;
@@ -721,8 +749,6 @@ begin
 end;
 
 {%endregion}
-
-
 
 {%region Date/Time Support }
 
@@ -1108,25 +1134,30 @@ begin
 end;
 
 class function TArrayTool<T>.Contains(const Values: TArray<T>; const Item: T): Boolean;
-var
-  ItemIndex: SizeInt;
 begin
-  Result := TArrayTool<T>.Contains(Values, Item, ItemIndex);
+  Result := IndexOf(Values, Item) >= 0;
 end;
 
 class function TArrayTool<T>.IndexOf(const Values: TArray<T>; const Item: T; const Comparer: IEqualityComparer<T>): SizeInt;
+var
+  i : SizeInt;
 begin
-  TArrayTool<T>.Contains(Values, Item, Comparer, Result);
+  Result := -1;
+  for i := Low(Values) to High(Values) do
+    if Comparer.Equals(Values[i], Item) then begin
+      Result := i;
+      exit;
+    end;
 end;
 
 class function TArrayTool<T>.IndexOf(const Values: TArray<T>; const Item: T): SizeInt;
 begin
-  TArrayTool<T>.Contains(Values, Item, Result);
+  Result := IndexOf(Values, Item, TEqualityComparer<T>.Default);
 end;
 
 class function TArrayTool<T>.Copy(const AArray: array of T): TArray<T>;
 begin
-  Copy(AArray, 0, Length(AArray));
+  Result := Copy(AArray, 0, Length(AArray));
 end;
 
 class function TArrayTool<T>.Copy(const AArray: array of T; FromIndex, Count: SizeInt ): TArray<T>;
@@ -1308,11 +1339,182 @@ class function TArrayTool<T>._Length(const Values: array of T) : SizeInt;
 begin
    Result := Length(Values);
 end;
+
 {%endregion}
 
+{%region TVariantTool}
+
+class function TVariantTool.IsNumeric(const AValue : Variant) : boolean;
+begin
+  // VarIsNumeric seems to be broken
+  case VarType(AValue) of
+    varsmallint, varinteger, varsingle,
+    vardouble, varcurrency, varboolean, vardecimal,
+    varshortint, varbyte, varword, varlongword, varint64, varqword : Result := true;
+    else Result := false;
+  end;
+end;
+
+class function TVariantTool.TryParseBool(const AValue : Variant; out ABoolean : boolean) : boolean;
+var
+  AValueStr : string;
+begin
+  ABoolean := false;
+  Result := false;
+  if VarIsBool(AValue) then begin
+    ABoolean := Boolean(AValue);
+    Result := true;
+  end else if VarIsNumeric(AValue) then
+    case VarToInt(AValue) of
+      0: begin
+          ABoolean := False;
+          Result := True;
+         end;
+      1: begin
+           ABoolean := True;
+           Result := True;
+         end;
+    end
+  else if VarIsStr(AValue) then begin
+    AValueStr := VarToStr(AValue);
+    Result := (AValueStr = VarToStr(VarTrue)) or (AValueStr = VarToStr(VarFalse));
+    ABoolean := AValueStr = VarToStr(VarTrue);
+  end;
+end;
+
+class function TVariantTool.VarToInt(const AVariant: Variant): integer;
+begin
+  Result := StrToIntDef(Trim(VarToStr(AVariant)), 0);
+end;
+
+class function TVariantTool.MatchTextExact(const AValue, AMatch : Variant) : boolean;
+begin
+  if VarIsNumeric(AValue) then
+    Result := false
+  else
+    Result := VarToStr(AValue) = VarToStr(AMatch);
+end;
+
+class function TVariantTool.MatchTextBeginning(const AValue, AMatch : Variant) : boolean;
+begin
+  Result := VarToStr(AValue).StartsWith(VarToStr(AMatch));
+end;
+
+class function TVariantTool.MatchTextEnd(const AValue, AMatch : Variant) : boolean;
+begin
+  Result := VarToStr(AValue).EndsWith(VarToStr(AMatch));
+end;
+
+class function TVariantTool.MatchTextAnywhere(const AValue, AMatch : Variant) : boolean;
+begin
+  Result := VarToStr(AValue).Contains(VarToStr(AMatch));
+end;
+
+class function TVariantTool.NumericEQ(const AValue, AMatch : Variant) : boolean;
+var
+  bmatch : boolean;
+begin
+  if NOT IsNumeric(AValue) then
+    Exit(false);
+
+  IF VarIsBool(AValue) then begin
+    if TryParseBool(AMatch, bmatch) then begin
+      Result := (Boolean(AValue) = bmatch);
+    end else begin
+      Result := false;
+      end
+  end else begin
+    Result := TCompare.Variant(@AValue, @AMatch) = 0;
+  end;
+end;
+
+class function TVariantTool.NumericLT(const AValue, AMatch : Variant) : boolean;
+begin
+  if (NOT IsNumeric(AValue)) OR (VarIsBool(AValue)) then
+    Exit(false);
+  Result := TCompare.Variant(@AValue, @AMatch) = -1;
+end;
+
+class function TVariantTool.NumericLTE(const AValue, AMatch : Variant) : boolean;
+var
+  cmp : Integer;
+begin
+  if (NOT IsNumeric(AValue)) OR (VarIsBool(AValue)) then
+    Exit(false);
+  cmp := TCompare.Variant(@AValue, @AMatch);
+  Result := (cmp = -1) OR (cmp = 0);
+end;
+
+class function TVariantTool.NumericGT(const AValue, AMatch : Variant) : boolean;
+var
+  cmp : Integer;
+begin
+  if (NOT IsNumeric(AValue)) OR (VarIsBool(AValue)) then
+    Exit(false);
+  cmp := TCompare.Variant(@AValue, @AMatch);
+  Result := (cmp = 1);
+end;
+
+class function TVariantTool.NumericGTE(const AValue, AMatch : Variant) : boolean;
+var
+  cmp : Integer;
+begin
+  if (NOT IsNumeric(AValue)) OR (VarIsBool(AValue)) then
+    Exit(false);
+  cmp := TCompare.Variant(@AValue, @AMatch);
+  Result := (cmp = 1) OR (cmp = 0);
+end;
+
+class function TVariantTool.NumericBetweenInclusive(const AValue, Lower, Upper : Variant) : boolean;
+var
+  lowercmp, uppercmp : Integer;
+begin
+  if (NOT IsNumeric(AValue)) OR (VarIsBool(AValue)) then
+    Exit(false);
+  lowercmp := TCompare.Variant(@AValue, @Lower);
+  uppercmp := TCompare.Variant(@AValue, @Upper);
+  Result := ((lowercmp = 1) OR (lowercmp = 0)) AND ((uppercmp = -1) OR (uppercmp = 0));
+end;
+
+class function TVariantTool.NumericBetweenExclusive(const AValue, Lower, Upper : Variant) : boolean;
+var
+  lowercmp, uppercmp : Integer;
+begin
+  if NOT IsNumeric(AValue) then
+    Exit(false);
+  lowercmp := TCompare.Variant(@AValue, @Lower);
+  uppercmp := TCompare.Variant(@AValue, @Upper);
+  Result := (lowercmp = 1) AND (uppercmp = -1);
+end;
+
+{%endregion}
+
+{%region TFileTool }
+
+class procedure TFileTool.AppendText(const AFileName: string; const AText: string);
+var
+  fstream: TFileStream;
+begin
+  if (FileExists(AFileName)) then begin
+    fstream := TFileStream.Create(AFileName, fmOpenReadWrite or fmShareDenyNone);
+    fstream.Seek(0, soFromEnd);
+  end else begin
+    fstream := TFileStream.Create(AFileName, fmCreate or fmShareDenyNone);
+    fstream.Seek(0, soFromEnd);
+  end;
+  try
+    fstream.WriteAnsiString(AText+#13#10);
+  finally
+    fstream.Free;
+  end;
+end;
+
+{%endregion}
 
 initialization
   MinTimeStampDateTime:= StrToDateTime('1980-01-01 00:00:000', IntlDateTimeFormat);
+  VarTrue := True;
+  VarFalse := False;
 
 finalization
 

@@ -690,9 +690,7 @@ end;
 
 class procedure TUserInterface.ShowWallet;
 begin
-  // TODO - VALIDATION HERE
   FMainForm.Mode := wmWallet;
-  // else ShowError('', 'Wallet is currently unavailable, please wait until processing is finished');
 end;
 
 class procedure TUserInterface.ShowSyncDialog;

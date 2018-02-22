@@ -418,7 +418,7 @@
         <ResourceBaseClass Value="Form"/>
       </Unit74>
       <Unit75>
-        <Filename Value="Units\Forms\UGrids.pas"/>
+        <Filename Value="Units\PascalCoin\UDataSources.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit75>
       <Unit76>
@@ -459,7 +459,6 @@
     <Linking>
       <Debugging>
         <DebugInfoType Value="dsDwarf2Set"/>
-        <UseLineInfoUnit Value="False"/>
       </Debugging>
       <Options>
         <Win32>

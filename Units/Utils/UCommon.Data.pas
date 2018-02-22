@@ -17,11 +17,33 @@ unit UCommon.Data;
   {$MODE Delphi}
 {$ENDIF}
 
+{$MODESWITCH NESTEDPROCVARS}
+
 interface
 
 uses
-  Classes, SysUtils, Generics.Collections, UCommon, Generics.Defaults,
-  Variants, LazUTF8, math, typinfo;
+  Classes, SysUtils, Generics.Collections, UCommon, UCommon.Collections, Generics.Defaults,
+  Variants, LazUTF8, math, typinfo, syncobjs;
+
+type
+  TSortDirection = (sdNone, sdAscending, sdDescending);
+  TFilterOperand = (foAnd, foOr);
+  TSortNullPolicy = (snpNone, snpNullFirst, snpNullLast);
+  TVisualGridFilter = (vgfMatchTextExact, vgfMatchTextBeginning, vgfMatchTextEnd,
+    vgfMatchTextAnywhere, vgfNumericEQ, vgfNumericLT, vgfNumericLTE, vgfNumericGT,
+    vgfNumericGTE, vgfNumericBetweenInclusive, vgfNumericBetweenExclusive, vgfSortable);
+  TVisualGridFilters = set of TVisualGridFilter;
+
+const
+  TEXT_FILTER = [vgfMatchTextExact, vgfMatchTextBeginning, vgfMatchTextEnd, vgfMatchTextAnywhere];
+  NUMERIC_FILTER = [vgfNumericEQ, vgfNumericLT, vgfNumericLTE, vgfNumericGT, vgfNumericGTE, vgfNumericBetweenInclusive, vgfNumericBetweenExclusive];
+  SORTABLE_TEXT_FILTER = TEXT_FILTER + [vgfSortable];
+  SORTABLE_NUMERIC_FILTER = NUMERIC_FILTER + [vgfSortable];
+  SORTABLE_FILTER = [vgfSortable];
+  NON_SORTABLE_FILTER = [vgfMatchTextExact, vgfMatchTextBeginning, vgfMatchTextEnd,
+    vgfMatchTextAnywhere, vgfNumericEQ, vgfNumericLT, vgfNumericLTE, vgfNumericGT,
+    vgfNumericGTE, vgfNumericBetweenInclusive, vgfNumericBetweenExclusive];
+
 
 type
 
@@ -72,6 +94,124 @@ type
     vvalues: TArray<Variant>;
   end;
 
+  { TColumnFilter }
+
+  TColumnFilter = record
+    ColumnName: utf8string;
+    Sort: TSortDirection;
+    Filter: TVisualGridFilter;
+    Values: array of Variant;
+  end;
+
+  { TFilterCriteria }
+
+  TFilterCriteria = TArray<TColumnFilter>;
+
+  { TApplyFilterDelegate }
+
+  TApplyFilterDelegate<T> = function (constref AItem : T; constref AColumnFilter: TColumnFilter) : boolean of object;
+
+  { TApplySortDelegate }
+
+  TApplySortDelegate<T> = function (constref Left, Right : T; constref AColumnFilter: TColumnFilter) : Integer of object;
+
+  { TDataTable }
+
+  PDataTable = ^TDataTable;
+  TDataTable = record
+  public
+    Columns: TTableColumns;
+    Rows : TArray<Variant>;
+  end;
+
+
+  { TColumnFilterPredicate -- should be implementation only }
+
+  TColumnFilterPredicate<T> = class (TInterfacedObject, IPredicate<T>)
+     private
+       FFilter : TColumnFilter;
+       FDelegate : TApplyFilterDelegate<T>;
+     public
+       constructor Create(const AFilter : TColumnFilter; const ADelegate : TApplyFilterDelegate<T>); overload;
+       function Evaluate (constref AValue: T) : boolean;
+   end;
+
+  {TColumnFieldComparer }
+
+  TColumnFieldComparer<T> = class (TInterfacedObject, IComparer<T>)
+    private
+      FFilter : TColumnFilter;
+      FDelegate: TApplySortDelegate<T>;
+    public
+      constructor Create(const AFilter : TColumnFilter; const ADelegate: TApplySortDelegate<T>);
+      function Compare(constref ALeft, ARight: T): Integer; virtual;
+  end;
+
+  { TPageFetchParams }
+
+  TPageFetchParams = record
+    PageIndex: Integer;
+    PageSize: Integer;
+    Filter: TFilterCriteria;
+    Operand : TFilterOperand;
+    constructor Create(AIndex: Integer; ASize: Integer; AFilter: TFilterCriteria; AOperand: TFilterOperand);
+    function GetSortFilters : TArray<TColumnFilter>;
+    function GetSearchFilters : TArray<TColumnFilter>;
+  end;
+
+  { TPageFetchResult }
+
+  TPageFetchResult = record
+    PageIndex: Integer;
+    PageCount: Integer;
+    TotalDataCount: Integer;
+  end;
+
+  { TSearchCapability }
+
+  PSearchCapability = ^TSearchCapability;
+  TSearchCapability = record
+    ColumnName : utf8string;
+    SupportedFilters : TVisualGridFilters;
+    class function From(const AName : utf8string; AFilterType : TVisualGridFilters) : TSearchCapability; static;
+  end;
+
+  { TSearchCapabilities }
+
+  TSearchCapabilities = array of TSearchCapability;
+
+  { IDataSource }
+
+  IDataSource = interface
+    function FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
+    function GetSearchCapabilities: TSearchCapabilities;
+    property SearchCapabilities : TSearchCapabilities read GetSearchCapabilities;
+  end;
+
+  { TCustomDataSource }
+// TODO: split  into TBindedDataSource <- TCustomDataSource
+  TCustomDataSource<T> = class(TComponent, IDataSource)
+    private
+      FLock : TCriticalSection;
+      FColumns : TTableColumns;
+    protected
+      function GetNullPolicy(const AFilter : TColumnFilter) : TSortNullPolicy; virtual;
+      function GetItemDisposePolicy : TItemDisposePolicy; virtual; abstract;
+      function GetColumns : TTableColumns; virtual; abstract;
+      function ApplyColumnSort(constref Left, Right : T; constref AFilter: TColumnFilter) : Integer; virtual;
+      function ApplyColumnFilter(constref AItem: T; constref AFilter: TColumnFilter) : boolean; virtual;
+      function GetItemField(constref AItem: T; const AColumnName : utf8string) : Variant; virtual; abstract;
+      procedure DehydrateItem(constref AItem: T; var ATableRow: Variant); virtual; abstract;
+      function FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
+      function GetSearchCapabilities: TSearchCapabilities; virtual; abstract;
+      procedure OnBeforeFetchAll(constref AParams: TPageFetchParams); virtual;
+      procedure FetchAll(const AContainer : TList<T>); virtual; abstract;
+      procedure OnAfterFetchAll(constref AParams: TPageFetchParams); virtual;
+    public
+      constructor Create(AOwner: TComponent); override;
+      destructor Destroy; override;
+  end;
+
   { Expression API }
 
   TExpressionKind = (ekUnknown, ekText, ekNum, ekSet);
@@ -81,6 +221,7 @@ type
 
   TExpressionRecord = record
     Values: array of utf8string;
+    HasDecimals: boolean; // for ekSet and ekNum only
   case Kind: TExpressionKind of
     ekUnknown: ();
     ekText: (TextMatchKind: TTextMatchKind);
@@ -96,6 +237,17 @@ type
   public
     class procedure Parse(const AExpression: utf8string; const AExpressionKind: TExpressionKind; out AExpressionRecord: TExpressionRecord); overload;
     class function Parse(const AExpression: utf8string): TExpressionRecord; overload;
+  end;
+
+  { TDataSourceTool }
+
+  TDataSourceTool<T> = class
+    protected type
+      __IPredicate_T = IPredicate<T>;
+      __TList_IPredicate_T = TList<__IPredicate_T>;
+    public
+     class function ConstructRowComparer(const AFilters : TArray<TColumnFilter>; const ADelegate : TApplySortDelegate<T>) : IComparer<T>;
+     class function ConstructRowPredicate(const AFilters : TArray<TColumnFilter>; const ADelegate : TApplyFilterDelegate<T>; const AOperand : TFilterOperand) : IPredicate<T>;
   end;
 
 
@@ -119,7 +271,7 @@ resourcestring
 
 implementation
 
-uses dateutils;
+uses dateutils, UAutoScope;
 
 { VARIABLES }
 
@@ -232,6 +384,309 @@ begin
   SetLength(TTableRowData(Result).vvalues, Length(AColumns^));
 end;
 
+{ TSearchCapability }
+
+class function TSearchCapability.From(const AName : utf8string; AFilterType : TVisualGridFilters) : TSearchCapability;
+begin
+  Result.ColumnName := AName;
+  Result.SupportedFilters := AFilterType;
+end;
+
+{ TCustomDataSource }
+
+constructor TCustomDataSource<T>.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  FLock := TCriticalSection.Create;
+  FColumns := GetColumns;
+end;
+
+destructor TCustomDataSource<T>.Destroy;
+var
+  i : integer;
+  policy : TItemDisposePolicy;
+begin
+  inherited;
+  FreeAndNil(FLock);
+end;
+
+function TCustomDataSource<T>.GetNullPolicy(const AFilter : TColumnFilter) : TSortNullPolicy;
+begin
+  // Rule is as DBMS. When ascending NULLS show last (are greater), when descending, NULLS show first
+  case AFilter.Sort of
+    sdNone: Result := snpNone;
+    sdAscending: Result := snpNullLast;
+    sdDescending: Result := snpNullFirst;
+  end;
+end;
+
+function TCustomDataSource<T>.ApplyColumnSort(constref Left, Right : T; constref AFilter: TColumnFilter) : Integer;
+var
+  leftField, rightField : Variant;
+  leftType, rightType : Integer;
+  nullPolicy : TSortNullPolicy;
+begin
+  leftField := GetItemField(Left, AFilter.ColumnName);
+  rightField := GetItemField(Right, AFilter.ColumnName);
+  leftType := VarType(leftField);
+  rightType := VarType(rightField);
+  nullPolicy := GetNullPolicy(AFilter);
+
+  // Handle null-based corner cases
+  if (leftType = varNull) AND (rightType = varNull) then begin
+    Result := 0;
+    exit;
+  end else if (leftType = varNull) AND (rightType <> varNull) then begin
+    Result := IIF(nullPolicy = snpNullFirst , -1, 1);
+    exit;
+  end else if (leftType <> varNull) AND (rightType = varNull) then begin
+    Result := IIF(nullPolicy = snpNullFirst, 1, -1);
+    exit;
+  end;
+
+  // Compare left/right values
+  Result := TCompare.Variant(@leftField, @rightField);
+
+  // Invert result for descending
+  if AFilter.Sort = sdDescending then
+    Result := Result * -1;
+end;
+
+function TCustomDataSource<T>.ApplyColumnFilter(constref AItem: T; constref AFilter: TColumnFilter) : boolean;
+var
+  value : Variant;
+begin
+  if Length(AFilter.Values) = 0 then
+    raise EArgumentException.Create('AFilter.Values does not contain any parameters');
+
+  value := GetItemField(AItem, AFilter.ColumnName);
+  if AFilter.Filter in TEXT_FILTER then begin
+    case AFilter.Filter of
+      vgfMatchTextExact: Result := TVariantTool.MatchTextExact(value, AFilter.Values[0]);
+      vgfMatchTextBeginning: Result := TVariantTool.MatchTextBeginning(value, AFilter.Values[0]);
+      vgfMatchTextEnd: Result := TVariantTool.MatchTextEnd(value, AFilter.Values[0]);
+      vgfMatchTextAnywhere: Result := TVariantTool.MatchTextAnywhere(value, AFilter.Values[0]);
+    end;
+  end else if AFilter.Filter in NUMERIC_FILTER then begin
+    case AFilter.Filter of
+      vgfNumericEQ: Result := TVariantTool.NumericEQ(value, AFilter.Values[0]);
+      vgfNumericLT: Result := TVariantTool.NumericLT(value, AFilter.Values[0]);
+      vgfNumericLTE: Result := TVariantTool.NumericLTE(value, AFilter.Values[0]);
+      vgfNumericGT: Result := TVariantTool.NumericGT(value, AFilter.Values[0]);
+      vgfNumericGTE: Result := TVariantTool.NumericGTE(value, AFilter.Values[0]);
+      vgfNumericBetweenInclusive: begin
+        if Length(AFilter.Values) < 2 then
+          raise EArgumentException.Create('AFilter.Values does not contain at least 2 parameters');
+        Result := TVariantTool.NumericBetweenInclusive(value, AFilter.Values[0], AFilter.Values[1]);
+      end;
+      vgfNumericBetweenExclusive: begin
+        if Length(AFilter.Values) < 2 then
+          raise EArgumentException.Create('AFilter.Values does not contain at least 2 parameters');
+        Result := TVariantTool.NumericBetweenExclusive(value, AFilter.Values[0], AFilter.Values[1]);
+      end;
+    end;
+  end else Result := false;
+end;
+
+function TCustomDataSource<T>.FetchPage(constref AParams: TPageFetchParams; var ADataTable: TDataTable): TPageFetchResult;
+var
+  i, j : SizeInt;
+  data : TList<T>;
+  GC : TScoped;
+  pageStart, pageEnd : SizeInt;
+  entity : T;
+  comparer : IComparer<T>;
+  filters : TArray<TColumnFilter>;
+  filter : IPredicate<T>;
+begin
+  OnBeforeFetchAll(AParams);
+  FLock.Acquire;
+  try
+     // Fetch underlying data if stale
+     data := GC.AddObject( TList<T>.Create ) as TList<T>;
+     FetchAll(data);
+
+     // Filter the data
+     filters := AParams.GetSearchFilters;
+     if Length(filters) > 0 then
+       TListTool<T>.FilterBy( data, TDataSourceTool<T>.ConstructRowPredicate( filters, ApplyColumnFilter, AParams.Operand ) );
+
+     // Sort the data
+     filters := AParams.GetSortFilters;
+     if Length(filters) > 0 then
+       data.Sort( TDataSourceTool<T>.ConstructRowComparer( AParams.Filter, ApplyColumnSort ) );
+
+     // Setup result
+     Result.TotalDataCount := data.Count;
+     if (Result.TotalDataCount = 0) then begin
+         Result.PageCount := 0;
+         Result.PageIndex := -1;
+         pageStart := 0;
+         pageEnd := -1;
+     end;
+     Result.PageCount := Ceil (data.Count / (1.0 *AParams.PageSize));
+     if (AParams.PageSize >= 0) and (data.Count > 0) then begin
+       Result.PageIndex := ClipValue(AParams.PageIndex, 0, Result.PageCount - 1);
+       pageStart := Result.PageIndex * AParams.PageSize;
+       pageEnd := ClipValue(pageStart + (AParams.PageSize - 1), pageStart, data.Count - 1);
+     end else begin
+       Result.PageIndex := 0;
+       pageStart := 0;
+       pageEnd := data.Count - 1;
+     end;
+
+     // Dehydrate the page of data only
+
+     // Set columns
+     ADataTable.Columns := FColumns;
+
+     if pageEnd >= pageStart then begin
+       j := 0;
+       SetLength(ADataTable.Rows, pageEnd - pageStart + 1);
+       for i := pageStart to pageEnd do begin
+         ADataTable.Rows[j] := TTableRow.New(@FColumns);
+         DehydrateItem( data[i], ADataTable.Rows[j]);
+         inc(j)
+       end;
+     end;
+  finally
+    FLock.Release;
+  end;
+  OnAfterFetchAll(AParams);
+end;
+
+procedure TCustomDataSource<T>.OnBeforeFetchAll(constref AParams: TPageFetchParams);
+begin
+end;
+
+procedure TCustomDataSource<T>.OnAfterFetchAll(constref AParams: TPageFetchParams);
+begin
+end;
+
+{ TColumnFilterPredicate }
+
+constructor TColumnFilterPredicate<T>.Create(const AFilter : TColumnFilter; const ADelegate : TApplyFilterDelegate<T>);
+begin
+  FFilter := AFilter;
+  FDelegate := ADelegate;
+end;
+
+function TColumnFilterPredicate<T>.Evaluate (constref AValue: T) : boolean;
+begin
+  Result := FDelegate(AValue, FFilter);
+end;
+
+{ TColumnFieldComparer }
+
+constructor TColumnFieldComparer<T>.Create(const AFilter : TColumnFilter; const ADelegate: TApplySortDelegate<T>);
+begin
+  FFilter := AFilter;
+  FDelegate := ADelegate;
+end;
+
+function TColumnFieldComparer<T>.Compare(constref ALeft, ARight: T): Integer;
+begin
+  Result := FDelegate(ALeft, ARight, FFilter);
+end;
+
+{ TDataSourceTool }
+
+class function TDataSourceTool<T>.ConstructRowComparer(const AFilters : TArray<TColumnFilter>; const ADelegate : TApplySortDelegate<T>) : IComparer<T>;
+type
+  __IComparer_T = IComparer<T>;
+var
+  i : integer;
+  comparers : TList<__IComparer_T>;
+  filter : TColumnFilter;
+  GC : TScoped;
+begin
+  comparers := GC.AddObject(  TList<__IComparer_T>.Create ) as TList<__IComparer_T>;
+  for i := Low(AFilters) to High(AFilters) do begin
+    filter := AFilters[i];
+    if filter.Sort <> sdNone then
+      comparers.Add( TColumnFieldComparer<T>.Create( filter, ADelegate ) );
+  end;
+
+  case comparers.Count of
+    0: Result := nil;
+    1: Result := comparers[0];
+    else Result := TComparerTool<T>.Many(comparers);
+  end;
+end;
+
+class function TDataSourceTool<T>.ConstructRowPredicate(const AFilters : TArray<TColumnFilter>; const ADelegate : TApplyFilterDelegate<T>; const AOperand : TFilterOperand) : IPredicate<T>;
+type
+  __TColumnFilterPredicate_T = TColumnFilterPredicate<T>;
+  __TPredicateTool_T = TPredicateTool<T>;
+var
+  i : integer;
+  filters : __TList_IPredicate_T;
+  GC : TScoped;
+begin
+  filters := GC.AddObject( __TList_IPredicate_T.Create ) as __TList_IPredicate_T;
+  for i := Low(AFilters) to High(AFilters) do begin
+    if AFilters[i].Filter <> vgfSortable then begin
+      filters.Add( __TColumnFilterPredicate_T.Create(AFilters[i], ADelegate));
+    end;
+  end;
+
+  case filters.Count of
+    0: Result := nil;
+    1: Result := filters[0];
+    else case AOperand of
+      foAnd: Result := __TPredicateTool_T.AndMany(filters.ToArray);
+      foOr: Result := __TPredicateTool_T.OrMany(filters.ToArray);
+    end;
+  end;
+end;
+
+{ TPageFetchParams }
+
+constructor TPageFetchParams.Create(AIndex: Integer; ASize: Integer; AFilter: TFilterCriteria; AOperand : TFilterOperand);
+begin
+  PageIndex:= AIndex;
+  PageSize:=ASize;
+  Filter:=AFilter;
+  Operand := AOperand;
+end;
+
+function TPageFetchParams.GetSortFilters : TArray<TColumnFilter>;
+var
+  sortFilters : TList<TColumnFilter>;
+  GC : TScoped;
+
+  function IsSortFilter(constref AColFilter : TColumnFilter) : boolean;
+  begin
+    Result := AColFilter.Filter = vgfSortable;
+  end;
+
+begin
+  sortFilters := GC.AddObject( TList<TColumnFilter>.Create ) as TList<TColumnFilter>;
+  sortFilters.AddRange( Filter);
+  TListTool<TColumnFilter>.FilterBy( sortFilters, TPredicateTool<TColumnFilter>.FromFunc( IsSortFilter ));
+  SetLength(Result, 0);
+  if sortFilters.Count > 0 then
+    Result := sortFilters.ToArray;
+end;
+
+function TPageFetchParams.GetSearchFilters : TArray<TColumnFilter>;
+var
+  searchFilters : TList<TColumnFilter>;
+  GC : TScoped;
+
+  function IsSearchFilter(constref AColFilter : TColumnFilter) : boolean;
+  begin
+    Result := AColFilter.Filter <> vgfSortable;
+  end;
+
+begin
+  searchFilters := GC.AddObject( TList<TColumnFilter>.Create ) as TList<TColumnFilter>;
+  searchFilters.AddRange(Filter);
+  TListTool<TColumnFilter>.FilterBy( searchFilters, TPredicateTool<TColumnFilter>.FromFunc( IsSearchFilter ));
+  SetLength(Result, 0);
+  if searchFilters.Count > 0 then
+    Result := searchFilters.ToArray;
+end;
 
 { TSearchExpressionService }
 
@@ -243,7 +698,7 @@ const
 type
   TToken = (tkNone, tkPercent, tkLess, tkGreater, tkEqual, tkLessOrEqual,
     tkGreaterOrEqual, tkOpeningParenthesis, tkClosingParenthesis,
-    tkOpeningBracket, tkClosingBracket,  tkText, tkNum, tkComma);
+    tkOpeningBracket, tkClosingBracket, tkText, tkNum, tkComma);
 
   TUTF8Char = record
     Length: byte;
@@ -287,6 +742,8 @@ var
   LExpression: utf8string;
   LLastPercent: boolean = false;
   LExpressionKind: TExpressionKind;
+  LWasUnknow: boolean;
+  LHasDecimals: boolean = false;
 
   procedure NextValue;
   begin
@@ -308,6 +765,7 @@ begin
   if AExpression = '' then
     Exit;
 
+  LWasUnknow := AExpressionKind = ekUnknown;
   LExpressionKind := AExpressionKind;
   // more simple parsing loop
   if AExpressionKind in [ekSet, ekNum] then
@@ -360,9 +818,12 @@ begin
             until not (c^ in ['0'..'9', '.']);
             Dec(c);
             case LExpressionKind of
-              ekUnknown, ekSet, ekNum: LToken:=tkNum;
-              ekText: LToken:=tkText;
+              ekUnknown, ekSet, ekNum: LToken := tkNum;
+              ekText: LToken := tkText;
             end;
+            if LWasUnknow and LDot then
+              LHasDecimals := true;
+            LDot := false;
           end;
         '%':
           begin
@@ -484,13 +945,13 @@ begin
             tkText, tkNum: // tkNum is here because is possible to parse: 123%
               begin
                 if (AExpressionRecord.TextMatchKind = tmkUnknown) then
-                  AExpressionRecord.TextMatchKind:=tmkMatchTextEnd
+                  AExpressionRecord.TextMatchKind:=tmkMatchTextBeginning
                 else
                   AExpressionRecord.TextMatchKind:=tmkMatchTextAnywhere;
                 LLastPercent:=true;
               end;
             tkNone:
-              AExpressionRecord.TextMatchKind:=tmkMatchTextBeginning;
+              AExpressionRecord.TextMatchKind:=tmkMatchTextEnd;
             tkPercent:
               raise ESearchExpressionParserException.CreateFmt(sUnexpectedOccurrenceOf_Found, ['%']);
           end;
@@ -552,6 +1013,7 @@ begin
     AExpressionRecord.Values[i] := LValues[i];
 
   AExpressionRecord.Kind := LExpressionKind;
+  AExpressionRecord.HasDecimals := LHasDecimals;
 end;
 
 class function TSearchExpressionService.Parse(const AExpression: utf8string
@@ -560,7 +1022,6 @@ begin
   Result.Kind := ekUnknown;
   Parse(AExpression, Result.Kind, Result);
 end;
-
 
 initialization
   TableRowType := TTableRow.Create;
