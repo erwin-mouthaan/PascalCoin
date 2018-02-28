@@ -19,7 +19,6 @@ type
   TCTRLWallet = class(TApplicationForm)
     cbAccounts: TComboBox;
     cbShowSelectedOps: TCheckBox;
-    cmbDuration: TComboBox;
     gpMyAccounts: TGroupBox;
     gpRecentOps: TGroupBox;
     GroupBox1: TGroupBox;
@@ -42,8 +41,8 @@ type
     FDuration : TCTRLWalletDuration;
     FAccountsGrid : TVisualGrid;
     FOperationsGrid : TVisualGrid;
-    FMyAccountDataSource : TMyAccountsDataSource;
-    FOperationsDataSource : TOperationsDataSource;
+    FAccountsDataSource : TUserAccountsDataSource;
+    FOperationsDataSource : TAccountsOperationsDataSource;
     procedure SetAccountsView(view: TCTRLWalletAccountView);
     procedure SetDuration(const ADuration: TCTRLWalletDuration);
   protected
@@ -53,6 +52,8 @@ type
     procedure OnAccountsUpdated(Sender: TObject);
     procedure OnAccountsSelected(Sender: TObject; constref ASelection: TVisualGridSelection);
     procedure OnOperationSelected(Sender: TObject; constref ASelection: TVisualGridSelection);
+    procedure OnAccountsGridColumnInitialize(Sender: TObject; AColIndex:Integer; AColumn: TVisualColumn);
+    procedure OnOperationsGridColumnInitialize(Sender: TObject; AColIndex:Integer; AColumn: TVisualColumn);
   public
     property Duration : TCTRLWalletDuration read FDuration write SetDuration;
     property AccountsView : TCTRLWalletAccountView read FAccountsView write SetAccountsView;
@@ -61,13 +62,14 @@ type
 implementation
 
 uses
-  UUserInterface, UAccounts, UCommon, UAutoScope, Generics.Collections;
+  UUserInterface, UAccounts, UBlockChain, UCommon, UAutoScope, Generics.Collections;
 
 {$R *.lfm}
 
 { TCTRLWallet }
 
 procedure TCTRLWallet.FormCreate(Sender: TObject);
+var cmbDuration : TComboBox;
 begin
   // event registrations
   FNodeNotifyEvents := TNodeNotifyEvents.Create (self);
@@ -75,8 +77,8 @@ begin
   FNodeNotifyEvents.OnOperationsChanged := OnNodeNewOperation;
 
   // data sources
-  FMyAccountDataSource := TMyAccountsDataSource.Create(Self);
-  FOperationsDataSource:= TOperationsDataSource.Create(Self);
+  FAccountsDataSource := TUserAccountsDataSource.Create(Self);
+  FOperationsDataSource:= TAccountsOperationsDataSource.Create(Self);
 
   // grids
   FAccountsGrid := TVisualGrid.Create(Self);
@@ -85,7 +87,12 @@ begin
   FAccountsGrid.AutoPageSize:= true;
   FAccountsGrid.SelectionType:= stMultiRow;
   FAccountsGrid.Options := [vgoColAutoFill, vgoColSizing, vgoSortDirectionAllowNone];
-  FAccountsGrid.DefaultStretchedColumn := 1;
+  FAccountsGrid.DefaultColumnWidths := TArray<Integer>.Create(
+    100,                   // Account
+    CT_VISUALGRID_STRETCH, // Name
+    100                    // Balance
+  );
+  FAccountsGrid.OnColumnInitialize:= OnAccountsGridColumnInitialize;
   FAccountsGrid.OnSelection := OnAccountsSelected;
   FAccountsGrid.OnFinishedUpdating := OnAccountsUpdated;
 
@@ -95,8 +102,33 @@ begin
   FOperationsGrid.AutoPageSize:= true;
   FOperationsGrid.SelectionType:= stRow;
   FOperationsGrid.Options := [vgoColAutoFill, vgoColSizing, vgoSortDirectionAllowNone];
-  FOperationsGrid.DefaultStretchedColumn := 3;
+  FOperationsGrid.DefaultColumnWidths := TArray<Integer>.Create(
+    130,                   // Time
+    CT_VISUALGRID_DEFAULT, // Block
+    100,                   // Account
+    150,                   // Type
+    130,                   // Amount
+    CT_VISUALGRID_DEFAULT, // Fee
+    100,                   // Balance
+    CT_VISUALGRID_DEFAULT, // Payload
+    80,                    // OPHASH
+    CT_VISUALGRID_STRETCH  // Description (stretch)
+  );
+  FOperationsGrid.OnColumnInitialize:= OnOperationsGridColumnInitialize;
   FOperationsGrid.OnSelection := OnOperationSelected;
+  FOperationsGrid.Caption.Alignment:= taCenter;
+  FOperationsGrid.Caption.Text := 'All Account Operations';
+  FOperationsGrid.Caption.Visible := true;
+  cmbDuration := TComboBox.Create(FOperationsGrid);
+  FOperationsGrid.WidgetControl := cmbDuration;
+  cmbDuration.Items.BeginUpdate;
+  try
+    cmbDuration.AddItem('30 Days', TObject(wd30Days));
+    cmbDuration.AddItem('Maximum', TObject(wdFullHistory));
+  finally
+    cmbDuration.Items.EndUpdate;
+  end;
+  cmbDuration.OnChange:=cmbDurationChange;
 
   AccountsView := wavMyAccounts;
   paOperations.AddControlDockCenter(FOperationsGrid);
@@ -114,6 +146,21 @@ begin
 
 end;
 
+procedure TCTRLWallet.OnAccountsGridColumnInitialize(Sender: TObject; AColIndex:Integer; AColumn: TVisualColumn);
+begin
+  case AColIndex of
+     2: AColumn.InternalColumn.Alignment := taRightJustify;
+  end;
+end;
+
+
+procedure TCTRLWallet.OnOperationsGridColumnInitialize(Sender: TObject; AColIndex:Integer; AColumn: TVisualColumn);
+begin
+  case AColIndex of
+     4, 5, 6: AColumn.InternalColumn.Alignment := taRightJustify;
+  end;
+end;
+
 procedure TCTRLWallet.SetAccountsView(view: TCTRLWalletAccountView);
 begin
   paAccounts.RemoveAllControls(false);
@@ -121,7 +168,7 @@ begin
      wavAllAccounts: raise Exception.Create('Not implemented');
      wavMyAccounts: begin
        FOperationsGrid.DataSource := FOperationsDataSource;
-       FAccountsGrid.DataSource := FMyAccountDataSource;
+       FAccountsGrid.DataSource := FAccountsDataSource;
        FAccountsGrid.Caption.Text := 'My Accounts';
        paAccounts.AddControlDockCenter(FAccountsGrid);
        FAccountsGrid.RefreshGrid;
@@ -154,8 +201,8 @@ end;
 
 procedure TCTRLWallet.OnAccountsUpdated(Sender: TObject);
 begin
-   lblTotalPASC.Caption := TAccountComp.FormatMoney( FMyAccountDataSource.Overview.TotalPASC );
-   lblTotalPASA.Caption := Format('%d', [FMyAccountDataSource.Overview.TotalPASA] );
+   lblTotalPASC.Caption := TAccountComp.FormatMoney( FAccountsDataSource.Overview.TotalPASC );
+   lblTotalPASA.Caption := Format('%d', [FAccountsDataSource.Overview.TotalPASA] );
 end;
 
 procedure TCTRLWallet.OnAccountsSelected(Sender: TObject; constref ASelection: TVisualGridSelection);
@@ -166,11 +213,10 @@ var
   GC : TScoped;
 begin
   selectedAccounts := GC.AddObject( TList<Cardinal>.Create ) as TList<Cardinal>;
-  row := ASelection.Row;
-  if (row >= 0) AND (row < FAccountsGrid.RowCount) then begin
-    if NOT TAccountComp.AccountTxtNumberToAccountNumber( FAccountsGrid.Rows[row].Account, acc) then
-      exit;
-    selectedAccounts.Add(acc);
+
+  for row := ASelection.Row to (ASelection.Row + ASelection.RowCount - 1) do begin
+    if (TAccountComp.AccountTxtNumberToAccountNumber( FAccountsGrid.Rows[row].Account, acc)) then
+      selectedAccounts.Add(acc);
   end;
   FOperationsDataSource.Accounts := selectedAccounts.ToArray;
   FOperationsGrid.RefreshGrid;
@@ -179,12 +225,15 @@ end;
 procedure TCTRLWallet.OnOperationSelected(Sender: TObject; constref ASelection: TVisualGridSelection);
 var
   row : longint;
+  v : Variant;
   ophash : AnsiString;
 begin
   row := ASelection.Row;
   if (row >= 0) AND (row < FOperationsGrid.RowCount) then begin
+    v := FOperationsGrid.Rows[row];
     ophash := FOperationsGrid.Rows[row].OPHASH;
-    TUserInterface.ShowOperationInfoDialog(self, ophash);
+    if TPCOperation.IsValidOperationHash(ophash) then
+      TUserInterface.ShowOperationInfoDialog(self, ophash);
   end;
 end;
 
@@ -198,13 +247,23 @@ begin
 end;
 
 procedure TCTRLWallet.cmbDurationChange(Sender: TObject);
+var
+  cmbDuration : TComboBox;
+  newDuration : TCTRLWalletDuration;
 begin
+  cmbDuration := Sender as TComboBox;
+  if not Assigned(cmbDuration) then
+    exit;
+
   case cmbDuration.ItemIndex of
-     0: Duration := wd30Days;
-     1: Duration := wdFullHistory;
+     0: newDuration := wd30Days;
+     1: newDuration := wdFullHistory;
+  end;
+  if Duration <> newDuration then begin
+    Duration := newDuration;
+    FOperationsGrid.RefreshGrid;
   end;
 end;
-
 
 end.
 

@@ -163,22 +163,6 @@ object CTRLWallet: TCTRLWallet
           ParentColor = False
           TabOrder = 1
         end
-        object cmbDuration: TComboBox
-          Left = 516
-          Height = 23
-          Top = 12
-          Width = 100
-          Anchors = [akTop, akRight]
-          ItemHeight = 15
-          ItemIndex = 0
-          Items.Strings = (
-            '30 Days'
-            'Full History'
-          )
-          OnChange = cmbDurationChange
-          TabOrder = 2
-          Text = '30 Days'
-        end
       end
     end
   end

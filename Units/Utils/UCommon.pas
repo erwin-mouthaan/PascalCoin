@@ -56,8 +56,9 @@ function IIF(const ACondition: Boolean; const ATrueResult, AFalseResult: variant
 function GetSetName(const aSet:PTypeInfo; Value: Integer):string;
 function GetSetValue(const aSet:PTypeInfo; Name: String): Integer;
 
-{ Clip Value }
+{ Clip/Min/Max Value }
 function ClipValue( AValue, MinValue, MaxValue: Integer) : Integer;
+function MinValue(const AArray : array of Cardinal) : Cardinal;
 
 { DateTime functions }
 function TimeStamp : AnsiString;
@@ -711,7 +712,7 @@ begin
   end;
 end;
 
-{ Clip Value }
+{ Clip/Min/Max Value }
 
 function ClipValue( AValue, MinValue, MaxValue: Integer) : Integer;
 begin
@@ -721,6 +722,16 @@ begin
     Result := MaxValue
   else
     Result := AValue
+end;
+
+function MinValue(const AArray : array of Cardinal) : Cardinal;
+var i : SizeInt;
+begin
+  Result := -1;
+  for i := Low(AArray) to High(AArray) do begin
+    if Result > AArray[i] then
+      Result := AArray[i];
+  end;
 end;
 
 {%region TBox }

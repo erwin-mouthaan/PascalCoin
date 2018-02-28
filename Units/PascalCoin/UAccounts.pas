@@ -86,7 +86,7 @@ Type
     Class Function EqualAccountInfos(const accountInfo1,accountInfo2 : TAccountInfo) : Boolean;
     Class Function EqualAccountKeys(const account1,account2 : TAccountKey) : Boolean;
     Class Function AccountNumberToAccountTxtNumber(account_number : Cardinal) : AnsiString;
-    Class function AccountTxtNumberToAccountNumber(Const account_txt_number : AnsiString; var account_number : Cardinal) : Boolean;
+    Class function AccountTxtNumberToAccountNumber(Const account_txt_number : AnsiString; out account_number : Cardinal) : Boolean;
     Class function FormatMoney(Money : Int64) : AnsiString;
     Class function FormatMoneyDecimal(Money : Int64) : Single;
     Class Function TxtToMoney(Const moneytxt : AnsiString; var money : Int64) : Boolean;
@@ -874,7 +874,7 @@ begin
   end;
 end;
 
-class function TAccountComp.AccountTxtNumberToAccountNumber(const account_txt_number: AnsiString; var account_number: Cardinal): Boolean;
+class function TAccountComp.AccountTxtNumberToAccountNumber(const account_txt_number: AnsiString; out account_number: Cardinal): Boolean;
 Var i : Integer;
   char1 : AnsiChar;
   char2 : AnsiChar;

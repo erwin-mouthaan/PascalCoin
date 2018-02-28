@@ -167,7 +167,7 @@ Type
     function DoOperation(AccountTransaction : TPCSafeBoxTransaction; var errors: AnsiString): Boolean; virtual; abstract;
     procedure AffectedAccounts(list : Classes.TList); virtual; abstract;
     class function OpType: Byte; virtual; abstract;
-    Class Function OperationToOperationResume(Block : Cardinal; Operation : TPCOperation; Affected_account_number : Cardinal; var OperationResume : TOperationResume) : Boolean;
+    Class Function OperationToOperationResume(Block : Cardinal; Operation : TPCOperation; Affected_account_number : Cardinal; var OperationResume : TOperationResume) : Boolean; overload;
     function OperationAmount : Int64; virtual; abstract;
     function OperationFee: UInt64; virtual; abstract;
     function OperationPayload : TRawBytes; virtual; abstract;
@@ -186,6 +186,8 @@ Type
     Property HasValidSignature : Boolean read FHasValidSignature;
     Class function OperationHash_OLD(op : TPCOperation; Block : Cardinal) : TRawBytes;
     Class function OperationHashValid(op : TPCOperation; Block : Cardinal) : TRawBytes;
+    class function IsValidOperationHash(const AOpHash : AnsiString) : Boolean;
+    class function TryParseOperationHash(const AOpHash : AnsiString; var block, account, n_operation: Cardinal; var md160Hash : TRawBytes) : Boolean;
     Class function DecodeOperationHash(Const operationHash : TRawBytes; var block, account,n_operation : Cardinal; var md160Hash : TRawBytes) : Boolean;
     Class function EqualOperationHashes(Const operationHash1, operationHash2 : TRawBytes) : Boolean;
     Class function FinalOperationHashAsHexa(Const operationHash : TRawBytes) : AnsiString;
@@ -211,7 +213,7 @@ Type
     Function OperationsCount : Integer;
     Function GetOperation(index : Integer) : TPCOperation;
     Function GetOperationsAffectingAccount(account_number : Cardinal; List : Classes.TList) : Integer;
-    Function GetOperationsAffectingAccounts(const account_numbers : TArray<Cardinal>; const AList: Generics.Collections.TList<Cardinal>) : Integer;
+    Function GetOperationsAffectingAccounts(const account_numbers : array of Cardinal; const AList: TList<Cardinal>) : Integer;
     Procedure CopyFromHashTree(Sender : TOperationsHashTree);
     Property TotalAmount : Int64 read FTotalAmount;
     Property TotalFee : Int64 read FTotalFee;
@@ -280,7 +282,7 @@ Type
     function LoadBlockFromStorage(Stream: TStream; var errors: AnsiString): Boolean;
     function LoadBlockFromStream(Stream: TStream; var errors: AnsiString): Boolean;
     //
-    Function CoinbasePsuedoOperation : TOperationResume;
+    Function GetMinerRewardPsuedoOperation : TOperationResume;
     Function ValidateOperationBlock(var errors : AnsiString) : Boolean;
     Property IsOnlyOperationBlock : Boolean read FIsOnlyOperationBlock;
     Procedure Lock;
@@ -986,7 +988,6 @@ begin
   Result := Round ( ASpan.TotalSeconds / CT_NewLineSecondsAvg );
 end;
 
-
 Class Function TPCOperationsComp.ConvertBlockCountToTimeSpan(const ACount : Integer) : TTimeSpan;
 begin
   Result := TTimeSpan.FromSeconds( CT_NewLineSecondsAvg * ACount );
@@ -1440,7 +1441,7 @@ begin
   end;
 end;
 
-function TPCOperationsComp.CoinbasePsuedoOperation : TOperationResume;
+function TPCOperationsComp.GetMinerRewardPsuedoOperation : TOperationResume;
 begin
    Result := CT_TOperationResume_NUL;
    Result.valid := true;
@@ -1450,7 +1451,7 @@ begin
    Result.Amount := self.OperationBlock.reward;
    Result.Fee := self.OperationBlock.fee;
    Result.Balance := Result.Amount+Result.Fee;
-   Result.OperationTxt := 'Blockchain reward';
+   Result.OperationTxt := 'Miner reward';
 end;
 
 function TPCOperationsComp.ValidateOperationBlock(var errors : AnsiString): Boolean;
@@ -1717,7 +1718,7 @@ begin
   end;
 end;
 
-Function TOperationsHashTree.GetOperationsAffectingAccounts(const account_numbers : TArray<Cardinal>; const AList: Generics.Collections.TList<Cardinal>) : Integer;
+Function TOperationsHashTree.GetOperationsAffectingAccounts(const account_numbers : array of Cardinal; const AList: TList<Cardinal>) : Integer;
 var
   blockOps,legacyList : Classes.TList;
   i,j : Integer;
@@ -2053,6 +2054,23 @@ begin
   finally
     ms.free;
   end;
+end;
+
+class function TPCOperation.IsValidOperationHash(const AOpHash : AnsiString) : Boolean;
+var block, account, n_operation: Cardinal; md160Hash : TRawBytes;
+begin
+  Result := TryParseOperationHash(AOpHash, block, account, n_operation, md160Hash);
+end;
+
+class function TPCOperation.TryParseOperationHash(const AOpHash : AnsiString; var block, account, n_operation: Cardinal; var md160Hash : TRawBytes) : Boolean;
+var
+  ophash : TRawBytes;
+begin
+  ophash := TCrypto.HexaToRaw(trim(AOpHash));
+  if Length(ophash) = 0 then
+    Exit(false);
+  If not TPCOperation.DecodeOperationHash(ophash,block,account,n_operation,md160Hash) then
+    Exit(false);
 end;
 
 class function TPCOperation.EqualOperationHashes(const operationHash1,operationHash2: TRawBytes): Boolean;

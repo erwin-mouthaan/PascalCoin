@@ -79,7 +79,7 @@ end;
 
 Function UnixTimeToLocalStr(UnixTime : Longint) : AnsiString;
 begin
-  DateTimeToStr(UnivDateTime2LocalDateTime(UnixToUnivDateTime(UnixTime)))
+  Result := DateTimeToStr(UnivDateTime2LocalDateTime(UnixToUnivDateTime(UnixTime)))
 end;
 
 end.
